@@ -1,11 +1,3 @@
-max_message_length = 64
-
-packet_start_mark = '\r'
-packet_end_mark = '\n'
-
-bridge_id_response = [hex(ord(item)) for item in 'i_am_serial2pjon']
-bridge_id_query = [hex(ord(item)) for item in 'are_you_serial2pjon']
-
 ''' Communication modes '''
 SIMPLEX = 150
 HALF_DUPLEX = 151

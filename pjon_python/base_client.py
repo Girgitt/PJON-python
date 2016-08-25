@@ -7,6 +7,9 @@ from pjon_python import crc8
 NOT IMPLEMENTED; it's just fooling around; refer to pjon_protocol for working implementation
 """
 
+bridge_id_response = [hex(ord(item)) for item in 'i_am_serial2pjon']
+bridge_id_query = [hex(ord(item)) for item in 'are_you_serial2pjon']
+
 
 class PjonBaseClient(object):
     def __init__(self):
