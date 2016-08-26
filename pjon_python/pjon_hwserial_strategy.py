@@ -7,6 +7,10 @@ log = logging.getLogger("ser-strat")
 THROUGH_HARDWARE_SERIAL_MAX_TIME = 0.01
 
 
+class UnsupportedPayloadType(Exception):
+    pass
+
+
 class PJONserialStrategy(object):
     def __init__(self, serial_port=None):
         if serial_port is None:
@@ -28,7 +32,15 @@ class PJONserialStrategy(object):
         return False
 
     def send_byte(self, b):
-        self._ser.write(b)
+        try:
+            self._ser.write(b)
+        except TypeError:
+            try:
+                if type(b) is int:
+                    b = chr(b)
+                self._ser.write(b)
+            except TypeError:
+                raise UnsupportedPayloadType("byte type should be chr or int but %s found" % type(b))
         return 0
 
     def receive_byte(self):

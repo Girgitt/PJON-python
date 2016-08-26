@@ -3,13 +3,15 @@ Pythonic interface to PJON communication protocol.
 
 Current status: 
 - work in progress
-- initially PHY abstraction provided by a serial-PJON bridge implemented as Arduino sketch
+- initially PHY abstraction to BitBand and OverSampling strategies provided by a serial-PJON bridge implemented as Arduino sketch
+- HardwareSerial strategy for HALF_DUPLEX, multi-master communication mode e.g. over RS485 bus will be provided directly (serial-RS485 converter required)
+- HardwareSerial strategy for SIMPLEX communication mode will be provided directly (e.g. to talk to a single Arduino)
 
 outstading features
 - PJON serial strategy
-  - receive without ACK from local bus [implementing]
-  - receive with ACK
-  - send without ACK to local bus
+  - receive without ACK from local bus [done]
+  - receive with ACK [done]
+  - send without ACK to local bus [implementing]
   - send with ACK
 - public api
   - blocking
