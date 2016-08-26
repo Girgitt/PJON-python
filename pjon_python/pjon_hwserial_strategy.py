@@ -33,14 +33,18 @@ class PJONserialStrategy(object):
 
     def send_byte(self, b):
         try:
-            self._ser.write(b)
-        except TypeError:
-            try:
-                if type(b) is int:
-                    b = chr(b)
+            if type(b) is str and len(b) == 1:
                 self._ser.write(b)
-            except TypeError:
-                raise UnsupportedPayloadType("byte type should be chr or int but %s found" % type(b))
+            elif type(b) is int:
+                b = chr(b)
+                if type(b) is str and len(b) == 1:
+                    self._ser.write(b)
+                else:
+                    raise TypeError
+            else:
+                raise TypeError
+        except TypeError:
+                raise UnsupportedPayloadType("byte type should be str length 1 or int but %s found" % type(b))
         return 0
 
     def receive_byte(self):
