@@ -4,7 +4,8 @@ import logging
 
 log = logging.getLogger("ser-strat")
 
-THROUGH_HARDWARE_SERIAL_MAX_TIME = 0.01
+THROUGH_HARDWARE_SERIAL_MAX_TIME_TO_WAIT_FOR_BYTE = 0.001
+THROUGH_HARDWARE_SERIAL_MIN_TIME_CHANNEL_CLEARANCE = 0.001
 
 
 class UnsupportedPayloadType(Exception):
@@ -26,18 +27,23 @@ class PJONserialStrategy(object):
             self._ser.flushInput()
             self._ser.flushOutput()
 
+        self._last_received_ts = 0
+
     def can_start(self):
         if self._ser:
-            return True
+            if time.time() - self._last_received_ts > THROUGH_HARDWARE_SERIAL_MIN_TIME_CHANNEL_CLEARANCE:
+                return True
         return False
 
     def send_byte(self, b):
         try:
             if type(b) is str and len(b) == 1:
+                log.debug("sending byte: %s (%s)" % (b, ord(b)))
                 self._ser.write(b)
             elif type(b) is int:
                 b = chr(b)
                 if type(b) is str and len(b) == 1:
+                    log.debug("sending byte: %s (%s)" % (b, ord(b)))
                     self._ser.write(b)
                 else:
                     raise TypeError
@@ -51,7 +57,7 @@ class PJONserialStrategy(object):
         # FIXME: move serial port reading to thread reading input to queue and change receive_byte to read from queue
         log.debug("    >>> rcv byte")
         start_time = time.time()
-        while time.time() - start_time < THROUGH_HARDWARE_SERIAL_MAX_TIME:
+        while time.time() - start_time < THROUGH_HARDWARE_SERIAL_MAX_TIME_TO_WAIT_FOR_BYTE:
             try:
                 bytes_waiting = self._ser.inWaiting()
                 if True:
@@ -60,14 +66,15 @@ class PJONserialStrategy(object):
                     rcv_val = self._ser.read(1)
                     if rcv_val != '':
                         log.debug("      > received byte: %s (%s)" % (ord(rcv_val), rcv_val))
+                        self._last_received_ts = time.time()
                         return ord(rcv_val)
-            except StopIteration:
+            except StopIteration:  # needed for mocking in unit tests
                 pass
 
         return pjon_protocol_constants.FAIL
 
     def receive_response(self):
-        self.receive_byte()
+        return self.receive_byte()
 
     def send_response(self, response):
         self.send_byte(response)

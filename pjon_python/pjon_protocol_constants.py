@@ -2,6 +2,9 @@
 SIMPLEX = 150
 HALF_DUPLEX = 151
 
+''' Maximum randon delay on collision '''
+COLLISION_MAX_DELAY = 48
+
 ''' Protocol symbols '''
 ACK = 6
 ACQUIRE_ID = 63

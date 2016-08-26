@@ -12,7 +12,7 @@ outstading features
   - receive without ACK from local bus [done]
   - receive with ACK [done]
   - send without ACK to local bus [implementing]
-  - send with ACK
+  - send with ACK [implementing]
 - public api
   - blocking
   - non-blocking

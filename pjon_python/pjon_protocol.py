@@ -1,6 +1,8 @@
 import pjon_protocol_constants
 import crc8
 import logging
+import time
+import random
 
 log = logging.getLogger("pjon-prot")
 '''
@@ -64,6 +66,9 @@ class Packet(object):
         self._payload = payload
         self._packet_length = packet_length
         self._packet_info = packet_info
+        self._receive_ts = None
+        self._send_ts = None
+        self._send_attempts_count = None
 
     @property
     def payload(self):
@@ -80,6 +85,7 @@ class Packet(object):
 
 class PjonProtocol(object):
     def __init__(self, device_id, strategy):
+        self._acknowledge = True
         self._strategy = strategy
         self._device_id = device_id
         self._constanta = pjon_protocol_constants
@@ -97,8 +103,14 @@ class PjonProtocol(object):
         pass
 
     @staticmethod
-    def compute_crc_8(input_byte, crc):
-        return crc8.AddToCRC(input_byte, crc)
+    def compute_crc_8_for_byte(input_byte, crc):
+        try:
+            return crc8.AddToCRC(input_byte, crc)
+        except TypeError:
+            if type(input_byte) is str:
+                if len(input_byte) == 1:
+                    return crc8.AddToCRC(ord(input_byte), crc)
+        raise TypeError("unsupported type for crc calculation; should be byte or str length==1")
 
     def receiver_function(self, new_ref):
         self._receiver_function = new_ref
@@ -113,7 +125,7 @@ class PjonProtocol(object):
 
     @property
     def device_id(self):
-        return self.device_id
+        return self._device_id
 
     @property
     def router(self):
@@ -142,6 +154,9 @@ class PjonProtocol(object):
     def bus_id_equality(self, id_1, id_2):
         '''not implemented'''
         return False
+
+    def set_acknowledge(self, new_val):
+        self._acknowledge = new_val
 
     @staticmethod
     def get_packet_info(packet):
@@ -208,7 +223,7 @@ class PjonProtocol(object):
             '''
             if i == packet_length - 1:
                 break
-            CRC = self.compute_crc_8(data[i], CRC)
+            CRC = self.compute_crc_8_for_byte(data[i], CRC)
 
         data = data[:packet_length]
         log.info(" >> packet: %s" % data)
@@ -252,3 +267,69 @@ class PjonProtocol(object):
                 if not self.shared and ( self.shared and shared and self.bus_id_equality(data + 3, self.bus_id)):
                     self.strategy.send_response(pjon_protocol_constants.NAK)
             return pjon_protocol_constants.NAK
+
+    def send_string(self, recipient_id, string_to_send, string_length=None, packet_header=0):
+        if string_length is None:
+            log.debug("calculating str length")
+            string_length = len(string_to_send)
+
+        if string_to_send is None:
+            log.debug("string is None; ret FAIL")
+            return pjon_protocol_constants.FAIL
+
+        if self.mode != pjon_protocol_constants.SIMPLEX and not self.strategy.can_start():
+            log.debug("HALF_DUPLEX and BUSY: ret BUSY")
+            return pjon_protocol_constants.BUSY
+
+        CRC = 0
+
+        # Transmit recipient device id
+        self.strategy.send_byte(recipient_id)
+        CRC = self.compute_crc_8_for_byte(recipient_id, CRC)
+
+        # Transmit packet length
+        self.strategy.send_byte(string_length + 4)
+        CRC = self.compute_crc_8_for_byte(string_length + 4, CRC)
+
+        # Transmit header header
+        self.strategy.send_byte(packet_header)
+        CRC = self.compute_crc_8_for_byte(packet_header, CRC)
+
+        ''' If an id is assigned to the bus, the packet's content is prepended by
+           the ricipient's bus id. This opens up the possibility to have more than
+           one bus sharing the same medium. '''
+
+        for i in xrange(string_length):
+            self.strategy.send_byte(string_to_send[i])
+            CRC = self.compute_crc_8_for_byte(string_to_send[i], CRC)
+
+        self.strategy.send_byte(CRC)
+
+        # FIXME: any reason why not take ack requirement from the header?
+        if not self._acknowledge \
+                or recipient_id == pjon_protocol_constants.BROADCAST \
+                or self.mode == pjon_protocol_constants.SIMPLEX:
+            log.debug("no ACK required; not BROADCAST; or SIMPLEX; ret ACK")
+            return pjon_protocol_constants.ACK
+
+        log.debug(">>> receiving response")
+        response = self.strategy.receive_response()
+        log.debug("<<< receiving response; received: %s" % response)
+
+        if response == pjon_protocol_constants.ACK:
+            log.debug("received ACK resp; ret ACK")
+            return pjon_protocol_constants.ACK
+
+        ''' Random delay if NAK, corrupted ACK/NAK or collision '''
+
+        if response != pjon_protocol_constants.FAIL:
+            log.debug("collision or corruption; sleeping")
+            time.sleep( random.randint(0, pjon_protocol_constants.COLLISION_MAX_DELAY/1000))
+
+            # FIXME: original PJON lib does not return anything
+            return pjon_protocol_constants.BUSY
+
+        if response == pjon_protocol_constants.NAK:
+            return pjon_protocol_constants.NAK
+
+        return pjon_protocol_constants.FAIL
