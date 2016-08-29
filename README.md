@@ -11,10 +11,17 @@ outstading features
 - PJON serial strategy
   - receive without ACK from local bus [done]
   - receive with ACK [done]
-  - send without ACK to local bus [implementing]
-  - send with ACK [implementing]
+  - send without ACK to local bus [done]
+  - send with ACK [done]
+- PJON protocol
+  - receive [done]
+  - send [done]
+  - update [done]
+  - repetitive send
+  - local bus support [done]
+  - shared bus support
 - public api
-  - blocking
+  - blocking [implementing]
   - non-blocking
 - auto-discover of serial-PJON bridge
 

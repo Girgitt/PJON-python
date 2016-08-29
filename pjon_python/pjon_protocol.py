@@ -3,6 +3,7 @@ import crc8
 import logging
 import time
 import random
+import math
 
 log = logging.getLogger("pjon-prot")
 '''
@@ -53,6 +54,7 @@ PJON v4.2
 '''
 
 
+
 class PacketInfo(object):
     header = 0
     receiver_id = 0
@@ -61,7 +63,7 @@ class PacketInfo(object):
     sender_bus_id = [0, 0, 0, 0]
 
 
-class Packet(object):
+class ReceivedPacket(object):
     def __init__(self, payload, packet_length, packet_info):
         self._payload = payload
         self._packet_length = packet_length
@@ -83,21 +85,49 @@ class Packet(object):
         return self._packet_info
 
 
+class OutgoingPacket(object):
+    def __init__(self):
+        self.header = None
+        self.content = None
+        self.device_id = None
+        self.length = None
+        self.state = 0
+        self.registration = None
+        self.timing = None
+        self.attempts = 0
+
+    def __str__(self):
+        return "device_id: %s, payload: %s" % (self.device_id, self.content)
+
+
 class PjonProtocol(object):
     def __init__(self, device_id, strategy):
         self._acknowledge = True
+        self._sender_info = False
+        self._router = False
         self._strategy = strategy
         self._device_id = device_id
         self._constanta = pjon_protocol_constants
+        self._shared = False
         self._mode = pjon_protocol_constants.HALF_DUPLEX
         self._localhost = [0, 0, 0, 0]
         self._bus_id = [0, 0, 0, 0]
-        self._router = False
-        self._receiver_function = None
+        self._receiver_function = self.dummy_receiver
+        self._error_function = self.dummy_error
         self._store_packets = True
         self._stored_received_packets = []
         self._received_packets_buffer_length = 32
-        # self._packet_template = ''.join(['%sender_id%', '%message_length%', '%end_mark%'])
+        self._bit_index_by_value = {
+            1:  0,
+            2:  1,
+            4:  2,
+            8:  3,
+            16: 4,
+            32: 5,
+            64: 6
+        }
+        self.outgoing_packets = []
+        self._auto_delete = True
 
     def begin(self):
         pass
@@ -139,9 +169,12 @@ class PjonProtocol(object):
     def set_receiver(self, receiver_function):
         self._receiver_function = receiver_function
 
+    def set_error(self, error_function):
+        self._error_function = error_function
+
     @property
     def shared(self):
-        return False
+        return self._shared
 
     @property
     def mode(self):
@@ -158,6 +191,20 @@ class PjonProtocol(object):
     def set_acknowledge(self, new_val):
         self._acknowledge = new_val
 
+    def set_sender_info(self, new_val):
+        self._sender_info = new_val
+
+    def set_shared_network(self, new_val):
+        self._shared = new_val
+
+    @staticmethod
+    def dummy_receiver(*args, **kwargs):
+        pass
+
+    @staticmethod
+    def dummy_error(*args, **kwargs):
+        pass
+
     @staticmethod
     def get_packet_info(packet):
         packet_info = PacketInfo()
@@ -173,6 +220,9 @@ class PjonProtocol(object):
             packet_info.sender_id = packet[pjon_protocol_constants.SENDER_ID_WITHOUT_NET_INFO_BYTE_ORDER]
 
         return packet_info
+
+    def get_bit_index_by_value(self, bit_value):
+        return self._bit_index_by_value[bit_value]
 
     def receive(self):
         data = [None for item in xrange(pjon_protocol_constants.PACKET_MAX_LENGTH)]
@@ -254,7 +304,7 @@ class PjonProtocol(object):
                 self._receiver_function(payload, packet_length, last_packet_info)
 
             if self._store_packets:
-                packet_to_store = Packet(payload, packet_length, last_packet_info)
+                packet_to_store = ReceivedPacket(payload, packet_length, last_packet_info)
                 self._stored_received_packets.append(packet_to_store)
                 if len(self._stored_received_packets) > self._received_packets_buffer_length:
                     log.debug("truncating received packets")
@@ -269,6 +319,7 @@ class PjonProtocol(object):
             return pjon_protocol_constants.NAK
 
     def send_string(self, recipient_id, string_to_send, string_length=None, packet_header=0):
+        log.debug("send_string to device: %s payload: %s header: %s" % (recipient_id, string_to_send, packet_header))
         if string_length is None:
             log.debug("calculating str length")
             string_length = len(string_to_send)
@@ -277,7 +328,7 @@ class PjonProtocol(object):
             log.debug("string is None; ret FAIL")
             return pjon_protocol_constants.FAIL
 
-        if self.mode != pjon_protocol_constants.SIMPLEX and not self.strategy.can_start():
+        if self.mode != pjon_protocol_constants.SIMPLEX and not self.strategy.can_start():    #FIXME: mode does not chec
             log.debug("HALF_DUPLEX and BUSY: ret BUSY")
             return pjon_protocol_constants.BUSY
 
@@ -306,9 +357,7 @@ class PjonProtocol(object):
         self.strategy.send_byte(CRC)
 
         # FIXME: any reason why not take ack requirement from the header?
-        if not self._acknowledge \
-                or recipient_id == pjon_protocol_constants.BROADCAST \
-                or self.mode == pjon_protocol_constants.SIMPLEX:
+        if (not self._acknowledge) or (recipient_id == pjon_protocol_constants.BROADCAST) or (self.mode == pjon_protocol_constants.SIMPLEX):
             log.debug("no ACK required; not BROADCAST; or SIMPLEX; ret ACK")
             return pjon_protocol_constants.ACK
 
@@ -333,3 +382,145 @@ class PjonProtocol(object):
             return pjon_protocol_constants.NAK
 
         return pjon_protocol_constants.FAIL
+
+    def send(self, recipient_id, payload):
+        return self.dispatch(recipient_id, payload)
+
+    def dispatch(self, recipient_id, payload, header=None, target_net=None, timing=None):
+        if header is None:
+            log.debug("getting header from internal config")
+            header = self.get_header_from_internal_config()
+
+        payload_length = len(payload)
+
+        if payload_length >= pjon_protocol_constants.PACKET_MAX_LENGTH:
+            log.error("payload too big")
+            return pjon_protocol_constants.FAIL
+
+        if timing is None:
+            timing = 0
+
+        if self.shared:
+            raise NotImplementedError("operation on shared bus (multiple networks) not implemented")
+
+        if len(self.outgoing_packets) <= pjon_protocol_constants.MAX_PACKETS:
+            outgoing_packet = OutgoingPacket()
+            outgoing_packet.header = header
+            outgoing_packet.content = payload
+            outgoing_packet.device_id = recipient_id
+            outgoing_packet.length = len(payload)
+            outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
+            outgoing_packet.registration = time.time()
+            outgoing_packet.timing = timing
+            outgoing_packet.attempts = 0
+            log.debug("adding packet to the outgoing packets list: %s" % str(outgoing_packet))
+            self.outgoing_packets.append(outgoing_packet)
+
+            return len(self.outgoing_packets) - 1
+
+        self._error_function(pjon_protocol_constants.PACKETS_BUFFER_FULL, pjon_protocol_constants.MAX_PACKETS)
+
+        return pjon_protocol_constants.FAIL
+
+    def get_header_from_internal_config(self):
+        header = 0
+        if self.shared:
+            log.debug("header for shared bus")
+            header |= pjon_protocol_constants.MODE_BIT
+        if self._sender_info:
+            log.debug("header with sender info")
+            header |= pjon_protocol_constants.SENDER_INFO_BIT
+        if self._acknowledge:
+            log.debug("header requiring ACK")
+            header |= pjon_protocol_constants.ACK_REQUEST_BIT
+
+        return header
+
+    def get_overridden_header(self, request_ack=True, include_sender_info=False, shared_network_mode=False):
+        header = self.get_header_from_internal_config()
+
+        if request_ack:
+            header |= pjon_protocol_constants.ACK_REQUEST_BIT
+        else:
+            #header |= ~(0xFF & (1 << self.get_bit_index_by_value(pjon_protocol_constants.ACK_REQUEST_BIT)))
+            header &= ~(1 << self.get_bit_index_by_value(pjon_protocol_constants.ACK_REQUEST_BIT))
+
+        if include_sender_info:
+            header |= pjon_protocol_constants.SENDER_INFO_BIT
+        else:
+            header &= ~(1 << self.get_bit_index_by_value(pjon_protocol_constants.SENDER_INFO_BIT))
+
+        if shared_network_mode:
+            header |= pjon_protocol_constants.MODE_BIT
+        else:
+            header &= ~(1 << self.get_bit_index_by_value(pjon_protocol_constants.MODE_BIT))
+
+        return header
+
+    def update(self):
+        log.debug(">>> update")
+        for outgoing_packet in self.outgoing_packets:
+            log.debug(" >> processing packet: %s" % outgoing_packet)
+            if outgoing_packet.state == 0:
+                log.debug("  > continue on outgoing_packet.state == 0")
+                continue
+
+            print "  > outgoing packet attempts: %s" % str(self.outgoing_packets[-1].attempts)
+            if (time.time() - outgoing_packet.registration) >= \
+                outgoing_packet.timing + math.pow(outgoing_packet.attempts, 3):
+                log.debug("   sending packet with header: %s" % outgoing_packet.header)
+                outgoing_packet.state = self.send_string(outgoing_packet.device_id,
+                                                         outgoing_packet.content,
+                                                         packet_header=outgoing_packet.header)
+                log.debug("  > send_string returned: %s" % outgoing_packet.state)
+            else:
+                log.debug("  > continue on time.time() - registration > timing + pow(attempts, 3)")
+                continue
+
+        was_packet_deleted = True
+        while was_packet_deleted:
+            was_packet_deleted = False
+            for outgoing_packet in self.outgoing_packets:
+                if outgoing_packet.state == pjon_protocol_constants.ACK:
+                    if not outgoing_packet.timing:
+                        if self._auto_delete:
+                            log.debug("  > deleting packet from outgoing buffer")
+                            log.debug("  > buffer before deletion: %s" % str(self.outgoing_packets))
+                            self.outgoing_packets[:] = [item for item in self.outgoing_packets if item is not outgoing_packet]
+                            log.debug("  > buffer after deletion: %s" % str(self.outgoing_packets))
+                            was_packet_deleted = True
+                            break
+                    else:
+                        outgoing_packet.attempts = 0
+                        outgoing_packet.registration = time.time()
+                        outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
+
+                if outgoing_packet.state == pjon_protocol_constants.FAIL:
+                    outgoing_packet.attempts += 1
+                    if outgoing_packet.attempts > pjon_protocol_constants.MAX_ATTEMPTS:
+                        if outgoing_packet.content[0] == pjon_protocol_constants.ACQUIRE_ID:
+                            # FIXME: not really understand why outgoing packets queue would ever get ID acquisition packet?
+                            self._device_id = outgoing_packet.device_id
+                            self.outgoing_packets[:] = [item for item in self.outgoing_packets if
+                                                        item is not outgoing_packet]
+                            log.debug("  > continue on ACQUIRE ID")
+                            was_packet_deleted = True
+                            break
+                            #continue
+                        else:
+                            self._error_function(pjon_protocol_constants.CONNECTION_LOST,
+                                                 outgoing_packet.device_id)
+
+                        if not outgoing_packet.timing:
+                            if self._auto_delete:
+                                log.debug("  > auto deleting failed packet")
+                                self.outgoing_packets[:] = [item for item in self.outgoing_packets if
+                                                            item is not outgoing_packet]
+                                was_packet_deleted = True
+                                break
+                        else:
+                            outgoing_packet.attempts = 0
+                            outgoing_packet.registration = time.time()
+                            outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
+
+        return len(self.outgoing_packets)

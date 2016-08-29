@@ -86,7 +86,7 @@ class TestPjonProtocol(TestCase):
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
             proto.receiver_function(self.print_args)
 
-            timeout = 0.05
+            timeout = 0.08
             start_ts = time.time()
             while True:
                 proto.receive()
@@ -245,12 +245,136 @@ class TestPjonProtocol(TestCase):
           #define ACK_REQUEST_BIT 4 // 1 - Request synchronous acknowledge | 0 - Do not request acknowledge
         '''
 
-        for i in range(30):
+        for i in range(20):
             print proto.send_string(35, "C123", packet_header=4)  # [0, 0, 1]: Local bus  | No sender info included | Acknowledge requested
             time.sleep(0.1)
 
         self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(35, "C123", packet_header=4))
 
+    def test_get_header_from_internal_config__should_return_header_for_all_supported_internal_configurations(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
 
+            self.assertEquals(True, (proto.get_header_from_internal_config() & pjon_protocol_constants.ACK_REQUEST_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.ACK_REQUEST_BIT))
+            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.SENDER_INFO_BIT))
+            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.MODE_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.MODE_BIT))
+
+            proto.set_sender_info(True)
+            self.assertEquals(True, (
+            proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
+                pjon_protocol_constants.SENDER_INFO_BIT))
+
+            proto.set_shared_network(True)
+            self.assertEquals(True, (
+                proto.get_header_from_internal_config() & pjon_protocol_constants.MODE_BIT) >> proto.get_bit_index_by_value(
+                pjon_protocol_constants.MODE_BIT))
+
+    def test_get_overridden_header__should_overwrite_header_bits(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+
+            self.assertEquals(0, proto.get_overridden_header(request_ack=False,
+                                                             shared_network_mode=False,
+                                                             include_sender_info=False))
+
+            self.assertEquals(1, proto.get_overridden_header(request_ack=False,
+                                                             shared_network_mode=True,
+                                                             include_sender_info=False))
+
+            self.assertEquals(2, proto.get_overridden_header(request_ack=False,
+                                                             shared_network_mode=False,
+                                                             include_sender_info=True))
+
+            self.assertEquals(4, proto.get_overridden_header(request_ack=True,
+                                                             shared_network_mode=False,
+                                                             include_sender_info=False))
+
+    def test_send__should_call_dispatch(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            with mock.patch('pjon_python.pjon_protocol.PjonProtocol.dispatch', create=True) as dispatch_mock:
+                proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+                proto.send(1, 'test')
+                self.assertEquals(1, dispatch_mock.call_count)
+
+    def test_dispatch_should_put_new_outgoing_packet_to_outgoing_packets_buffer(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            self.assertEquals(0, proto.send(17, 'test'))
+
+            self.assertEquals(1, len(proto.outgoing_packets))
+
+            self.assertEquals(proto.outgoing_packets[-1].state, pjon_protocol_constants.TO_BE_SENT)
+            self.assertEquals(proto.outgoing_packets[-1].content, 'test')
+            self.assertEquals(proto.outgoing_packets[-1].device_id, 17)
+
+    def test_dispatch_should_fail_on_too_many_outgoing_packets(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            for i in range(pjon_protocol_constants.MAX_PACKETS + 1):
+                self.assertEquals(i, proto.send(i, 'test'))
+
+            self.assertEquals(pjon_protocol_constants.FAIL, proto.send(1, 'test'))
+
+    def test_update_should_send_new_packet(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            proto.set_acknowledge(False)
+            self.assertEquals(0, proto.send(1, 'test0'))
+            self.assertEquals(1, proto.send(2, 'test1'))
+            self.assertEquals(2, proto.send(3, 'test2'))
+            self.assertEquals(3, proto.send(4, 'test3'))
+            self.assertEquals(4, proto.send(5, 'test4'))
+            self.assertEquals(5, proto.send(6, 'test5'))
+            self.assertEquals(6, proto.send(7, 'test6'))
+
+            self.assertEquals(7, len(proto.outgoing_packets))
+            proto.update()
+            self.assertEquals(0, len(proto.outgoing_packets))
+
+    def test_update_should_execute_error_handled_on_failed_max_attempts_send__and_delete_on_exceeded_max_attempts(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            single_packet = ['']
+            multiple_packets = []
+            packets_count = pjon_protocol_constants.MAX_ATTEMPTS + 1
+            for i in xrange(packets_count):
+                multiple_packets.extend(single_packet)
+
+            self.assertEquals(packets_count * len(single_packet), len(multiple_packets))
+
+            ser.read.side_effect = multiple_packets  # return values (empty) simulating no response to cause failure
+
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            proto.set_acknowledge(True)
+
+            self.assertEquals(0, proto.send(1, 'test0'))
+            self.assertEquals(1, proto.send(2, 'test1'))
+
+            self.assertEquals(2, len(proto.outgoing_packets))
+            with mock.patch('pjon_python.pjon_protocol.time', create=True) as time_mock:
+                time_mock.time.side_effect = [time.time()+item for item in range(3 * pjon_protocol_constants.MAX_ATTEMPTS)]
+
+                for i in xrange(pjon_protocol_constants.MAX_ATTEMPTS):
+                    proto.update()
+
+                self.assertEquals(2, len(proto.outgoing_packets))
+
+                error_function_mock = mock.Mock()
+                proto.set_error(error_function_mock)
+                proto.update()  # now failed outstanding packets should be deleted
+                self.assertEquals(0, len(proto.outgoing_packets))
+
+                error_function_mock.assert_any_call(pjon_protocol_constants.CONNECTION_LOST, 1)
+                error_function_mock.assert_any_call(pjon_protocol_constants.CONNECTION_LOST, 2)
+                self.assertEquals(2, error_function_mock.call_count)
 
 

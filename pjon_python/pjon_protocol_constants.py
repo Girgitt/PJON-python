@@ -16,14 +16,15 @@ BROADCAST = 0
 NOT_ASSIGNED = 255
 
 ''' Internalconstants '''
-FAIL = 0x100
+FAIL = 0x100                # 256
 TO_BE_SENT = 74
 
 ''' HEADER CONFIGURATION '''
 ''' Packet header bits '''
-MODE_BIT = 1        # 1 - Shared | 0 - Local
-SENDER_INFO_BIT = 2 # 1 - Sender device id + Sender bus id if shared | 0 - No info inclusion
-ACK_REQUEST_BIT = 4 # 1 - Request synchronous acknowledge | 0 - Do not request acknowledge
+#FIXME: it's actually not bit order but corresponding value
+MODE_BIT = 1         # 1 - Shared | 0 - Local
+SENDER_INFO_BIT = 2  # 1 - Sender device id + Sender bus id if shared | 0 - No info inclusion
+ACK_REQUEST_BIT = 4  # 1 - Request synchronous acknowledge | 0 - Do not request acknowledge
 
 ''' Errors '''
 CONNECTION_LOST = 101
