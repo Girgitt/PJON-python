@@ -191,6 +191,7 @@ class TestPjonProtocol(TestCase):
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
 
             ser.read.side_effect = [chr(pjon_protocol_constants.ACK)]
+            ser.inWaiting.side_effect = [0, 1]
 
             self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test"))
 
@@ -205,6 +206,7 @@ class TestPjonProtocol(TestCase):
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
             proto.set_acknowledge(False)
             ser.read.side_effect = ['1']
+            ser.inWaiting.side_effect = [0]
 
             self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test"))
 
@@ -328,6 +330,10 @@ class TestPjonProtocol(TestCase):
 
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
             proto.set_acknowledge(False)
+
+            serial_hw_strategy.can_start = mock.Mock()
+            serial_hw_strategy.can_start.return_value = True
+
             self.assertEquals(0, proto.send(1, 'test0'))
             self.assertEquals(1, proto.send(2, 'test1'))
             self.assertEquals(2, proto.send(3, 'test2'))
@@ -362,6 +368,9 @@ class TestPjonProtocol(TestCase):
             self.assertEquals(2, len(proto.outgoing_packets))
             with mock.patch('pjon_python.pjon_protocol.time', create=True) as time_mock:
                 time_mock.time.side_effect = [time.time()+item for item in range(3 * pjon_protocol_constants.MAX_ATTEMPTS)]
+
+                serial_hw_strategy.can_start = mock.Mock()
+                serial_hw_strategy.can_start.return_value = True
 
                 for i in xrange(pjon_protocol_constants.MAX_ATTEMPTS):
                     proto.update()

@@ -37,7 +37,7 @@ ID_ACQUISITION_FAIL = 105
 MAX_ATTEMPTS = 125
 
 ''' Packets buffer length '''
-MAX_PACKETS = 10
+MAX_PACKETS = 128
 
 ''' Max packet length, higher if necessary( and you have free memory '''
 PACKET_MAX_LENGTH = 50

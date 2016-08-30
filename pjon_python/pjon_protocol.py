@@ -62,6 +62,9 @@ class PacketInfo(object):
     sender_id = 0
     sender_bus_id = [0, 0, 0, 0]
 
+    def __str__(self):
+        return "%s -> %s" % (self.sender_id, self.receiver_id)
+
 
 class ReceivedPacket(object):
     def __init__(self, payload, packet_length, packet_info):
@@ -84,6 +87,9 @@ class ReceivedPacket(object):
     def packet_info(self):
         return self._packet_info
 
+    def __str__(self):
+        return "%s [%s]" % (str(self._packet_info), self.payload)
+
 
 class OutgoingPacket(object):
     def __init__(self):
@@ -97,7 +103,7 @@ class OutgoingPacket(object):
         self.attempts = 0
 
     def __str__(self):
-        return "device_id: %s, payload: %s" % (self.device_id, self.content)
+        return "registration: %s. device_id: %s, payload: %s, state: %s, attempts: %s" % (self.registration, self.device_id, self.content, self.state, self.attempts)
 
 
 class PjonProtocol(object):
@@ -363,7 +369,7 @@ class PjonProtocol(object):
 
         log.debug(">>> receiving response")
         response = self.strategy.receive_response()
-        log.debug("<<< receiving response; received: %s" % response)
+        log.info("<<< receiving response; received: %s" % response)
 
         if response == pjon_protocol_constants.ACK:
             log.debug("received ACK resp; ret ACK")
@@ -465,14 +471,13 @@ class PjonProtocol(object):
                 log.debug("  > continue on outgoing_packet.state == 0")
                 continue
 
-            print "  > outgoing packet attempts: %s" % str(self.outgoing_packets[-1].attempts)
-            if (time.time() - outgoing_packet.registration) >= \
+            if (time.time() - outgoing_packet.registration)*1000 >= \
                 outgoing_packet.timing + math.pow(outgoing_packet.attempts, 3):
                 log.debug("   sending packet with header: %s" % outgoing_packet.header)
                 outgoing_packet.state = self.send_string(outgoing_packet.device_id,
                                                          outgoing_packet.content,
                                                          packet_header=outgoing_packet.header)
-                log.debug("  > send_string returned: %s" % outgoing_packet.state)
+                log.info("  > send_string returned: %s" % outgoing_packet.state)
             else:
                 log.debug("  > continue on time.time() - registration > timing + pow(attempts, 3)")
                 continue
@@ -522,5 +527,9 @@ class PjonProtocol(object):
                             outgoing_packet.attempts = 0
                             outgoing_packet.registration = time.time()
                             outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
+                    #FIXME: original PJON is not re-scheduling failed packets for re-sending
+                    # if delivery failed but attempts below maximum allowable count; fixed below
+                    #else:
+                    #    outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
 
         return len(self.outgoing_packets)
