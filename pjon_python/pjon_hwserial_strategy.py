@@ -64,8 +64,8 @@ class PJONserialStrategy(object):
             receive_wait_time = THROUGH_HARDWARE_SERIAL_MAX_TIME_TO_WAIT_FOR_RESPONSE_BYTE
         while time.time() - start_time < receive_wait_time:
             try:
-                bytes_waiting = self._ser.inWaiting()
                 if True:
+                    bytes_waiting = self._ser.inWaiting()
                     if bytes_waiting > 0:  #  bug in pyserial? for single byte 0 is returned
                         #log.debug("     >> waiting bytes: %s" % bytes_waiting)
                         rcv_val = self._ser.read(1)
