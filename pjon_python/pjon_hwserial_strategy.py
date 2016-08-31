@@ -1,4 +1,4 @@
-import pjon_protocol_constants
+from pjon_python import pjon_protocol_constants
 import time
 import logging
 

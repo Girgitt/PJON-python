@@ -1,9 +1,15 @@
-import pjon_protocol_constants
-import crc8
+from pjon_python import pjon_protocol_constants
+from pjon_python import crc8
 import logging
 import time
 import random
 import math
+
+try:
+    xrange
+except NameError:
+    xrange = range
+
 
 log = logging.getLogger("pjon-prot")
 '''
@@ -52,8 +58,6 @@ PJON v4.2
                                         |Receiver info| Sender info |
 
 '''
-
-
 
 class PacketInfo(object):
     header = 0

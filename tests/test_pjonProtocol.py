@@ -7,6 +7,11 @@ import time
 import mock
 import logging
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 
 log = logging.getLogger("tests")
 
@@ -19,8 +24,12 @@ class TestPjonProtocol(TestCase):
         log.debug(">> print args")
         for arg in args:
             log.debug("arg: %s" % arg)
-        for key, value in kwargs.iteritems():
-            log.debug("kwarg: %s=%s" % (key, value))
+        try:
+            for key, value in kwargs.iteritems():
+                log.debug("kwarg: %s=%s" % (key, value))
+        except AttributeError:
+            for key, value in kwargs.items():
+                log.debug("kwarg: %s=%s" % (key, value))
 
     def test_crc_should_be_calcualted_for_single_char_str(self):
         with mock.patch('serial.Serial', create=True) as ser:
@@ -224,7 +233,7 @@ class TestPjonProtocol(TestCase):
         proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
         proto.set_acknowledge(False)
         for i in range(20):
-            print proto.send_string(35, "C123")
+            print(proto.send_string(35, "C123"))
             time.sleep(0.1)
 
         self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(35, "C123"))
@@ -248,7 +257,7 @@ class TestPjonProtocol(TestCase):
         '''
 
         for i in range(20):
-            print proto.send_string(35, "C123", packet_header=4)  # [0, 0, 1]: Local bus  | No sender info included | Acknowledge requested
+            print(proto.send_string(35, "C123", packet_header=4))  # [0, 0, 1]: Local bus  | No sender info included | Acknowledge requested
             time.sleep(0.1)
 
         self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(35, "C123", packet_header=4))
@@ -372,6 +381,8 @@ class TestPjonProtocol(TestCase):
 
                 serial_hw_strategy.can_start = mock.Mock()
                 serial_hw_strategy.can_start.return_value = True
+
+                ser.inWaiting.return_value = 1  # needed for python 3.5
 
                 for i in xrange(pjon_protocol_constants.MAX_ATTEMPTS):
                     proto.update()
