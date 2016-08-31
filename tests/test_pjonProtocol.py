@@ -351,6 +351,7 @@ class TestPjonProtocol(TestCase):
             serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
             single_packet = ['']
             multiple_packets = []
+            pjon_protocol_constants.MAX_ATTEMPTS = 3
             packets_count = pjon_protocol_constants.MAX_ATTEMPTS + 1
             for i in xrange(packets_count):
                 multiple_packets.extend(single_packet)
