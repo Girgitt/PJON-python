@@ -1,13 +1,28 @@
 # PJON-python
 Pythonic interface to PJON communication protocol.
 
-Current status: 
+PJON (Github: [PJON](https://github.com/gioblu/PJON/) ) is an open-source, multi-master, multi-media (one-wire, two-wires, radio) communication protocol available for various platforms (Arduino/AVR, ESP8266, Teensy).
+
+PJON is one of very few open-source implementations of multi-master communication protocols for microcontrollers. 
+
+PJON-python module in the current status enables communication with other PJON devices directly over UART (serial communication): 
+
+- In a basic scenario PJON + PJON-python can be a viable alternative to more complex protocols like Firmata (Arduino firmware on Github: [firmata/Arduino](https://github.com/firmata/arduino) for direct (SIMPLEX) communication host-uC. 
+- If RS485 drivers with auto-tx setup are used the host (e.g. Raspberry PI) can join multi-master PJON bus and python programs can communicate with multiple uC.
+- If uC with proxy firmware (sending packets between serial and other type of PJON bus) is used the host can communicate with PJON buses other than serial through that serial2pjon proxy uC.
+
+PJON-python module opens popular uC platforms (Arduino, ESP8266, Teensy) to the whole range of applications:
+- multi-master automation (reporting by exception lowers latency compared to polling-based protocols like Modbus)
+- open-hardware IoT (thanks to integration flexibility of other python modules)
+ 
+
+##Current status: 
 - work in progress, minimal client operational but requires PJON with enhanced serial strategy to support multi-master operation e.g. on RS485 bus
 - initially PHY abstraction to BitBang and OverSampling strategies provided by a serial-PJON bridge implemented as Arduino sketch
 - HardwareSerial strategy for HALF_DUPLEX, multi-master communication mode e.g. over RS485 bus is provided directly (serial-RS485 converter required)
 - HardwareSerial strategy for SIMPLEX communication mode will be provided directly (e.g. to talk to a single Arduino)
 
-outstading features
+##outstading features
 - PJON serial strategy
   - receive without ACK from local bus [done]
   - receive with ACK [done]
@@ -25,11 +40,11 @@ outstading features
   - non-blocking [done]
 - auto-discover of serial-PJON bridge
 
-v0.1 goals:
+####v0.1 goals:
 - local and remote serial port support with auto-discovery of the serial2pjon proxy arduino
 - PJON serial strategy for local bus with ACK support
 
-v0.2 goals:
+####v0.2 goals:
 - full PJON serial protocol for serial strategy (remote buses support)
 
 
