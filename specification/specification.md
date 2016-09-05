@@ -1,0 +1,1 @@
+The PJON protocol's specification is available in [PJON's GitHub repository](https://github.com/gioblu/PJON/tree/master/specification)
