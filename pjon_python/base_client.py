@@ -1,11 +1,12 @@
-from pjon_python import serial_utils
-import serial
-import time
-from pjon_python import crc8
-from pjon_python import pjon_protocol
-from pjon_python import pjon_hwserial_strategy
 import logging
+import time
 from threading import Thread
+
+import serial
+
+from pjon_python.protocol import pjon_protocol
+from pjon_python.strategies import pjon_hwserial_strategy
+from pjon_python.utils import serial_utils, crc8
 
 """
 NOT IMPLEMENTED; it's just fooling around; refer to pjon_protocol for working implementation

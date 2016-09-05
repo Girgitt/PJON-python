@@ -1,6 +1,9 @@
-from pjon_python import pjon_protocol_constants
-import time
 import logging
+import time
+
+from serial import SerialTimeoutException
+
+from pjon_python.protocol import pjon_protocol_constants
 
 log = logging.getLogger("ser-strat")
 
@@ -53,6 +56,10 @@ class PJONserialStrategy(object):
                 raise TypeError
         except TypeError:
                 raise UnsupportedPayloadType("byte type should be str length 1 or int but %s found" % type(b))
+
+        except SerialTimeoutException:
+            log.exception("write timeout")
+
         return 0
 
     def receive_byte(self, is_ack_response=False):

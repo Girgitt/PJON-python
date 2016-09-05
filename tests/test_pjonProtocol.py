@@ -1,11 +1,12 @@
-from unittest import TestCase, skip
-from pjon_python import pjon_protocol
-from pjon_python import pjon_hwserial_strategy
-from pjon_python import pjon_protocol_constants
-import serial
-import time
-import mock
 import logging
+import time
+from unittest import TestCase, skip
+
+import mock
+import serial
+
+from pjon_python.protocol import pjon_protocol, pjon_protocol_constants
+from pjon_python.strategies import pjon_hwserial_strategy
 
 try:
     xrange
@@ -267,13 +268,16 @@ class TestPjonProtocol(TestCase):
             serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
 
-            self.assertEquals(True, (proto.get_header_from_internal_config() & pjon_protocol_constants.ACK_REQUEST_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.ACK_REQUEST_BIT))
-            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.SENDER_INFO_BIT))
-            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.MODE_BIT) >> proto.get_bit_index_by_value(pjon_protocol_constants.MODE_BIT))
+            self.assertEquals(True, (proto.get_header_from_internal_config() & pjon_protocol_constants.ACK_REQUEST_BIT) >> proto.get_bit_index_by_value(
+                pjon_protocol_constants.ACK_REQUEST_BIT))
+            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
+                pjon_protocol_constants.SENDER_INFO_BIT))
+            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.MODE_BIT) >> proto.get_bit_index_by_value(
+                pjon_protocol_constants.MODE_BIT))
 
             proto.set_sender_info(True)
             self.assertEquals(True, (
-            proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
+                proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
                 pjon_protocol_constants.SENDER_INFO_BIT))
 
             proto.set_shared_network(True)
@@ -305,7 +309,7 @@ class TestPjonProtocol(TestCase):
     def test_send__should_call_dispatch(self):
         with mock.patch('serial.Serial', create=True) as ser:
             serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
-            with mock.patch('pjon_python.pjon_protocol.PjonProtocol.dispatch', create=True) as dispatch_mock:
+            with mock.patch('pjon_python.protocol.pjon_protocol.PjonProtocol.dispatch', create=True) as dispatch_mock:
                 proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
                 proto.send(1, 'test')
                 self.assertEquals(1, dispatch_mock.call_count)
@@ -376,8 +380,8 @@ class TestPjonProtocol(TestCase):
             self.assertEquals(1, proto.send(2, 'test1'))
 
             self.assertEquals(2, len(proto.outgoing_packets))
-            with mock.patch('pjon_python.pjon_protocol.time', create=True) as time_mock:
-                time_mock.time.side_effect = [time.time()+item for item in range(3 * pjon_protocol_constants.MAX_ATTEMPTS)]
+            with mock.patch('pjon_python.protocol.pjon_protocol.time', create=True) as time_mock:
+                time_mock.time.side_effect = [time.time() + item for item in range(3 * pjon_protocol_constants.MAX_ATTEMPTS)]
 
                 serial_hw_strategy.can_start = mock.Mock()
                 serial_hw_strategy.can_start.return_value = True

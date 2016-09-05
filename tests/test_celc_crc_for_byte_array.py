@@ -1,5 +1,6 @@
 from unittest import TestCase
-from pjon_python import crc8
+
+from pjon_python.utils import crc8
 
 
 class TestCelc_crc_for_byte_array(TestCase):

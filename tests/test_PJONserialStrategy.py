@@ -1,6 +1,9 @@
 from unittest import TestCase
-from pjon_python.pjon_hwserial_strategy import PJONserialStrategy, UnsupportedPayloadType
+
 import mock
+
+from pjon_python.strategies.pjon_hwserial_strategy import PJONserialStrategy, UnsupportedPayloadType
+
 
 class TestPJONserialStrategy(TestCase):
 

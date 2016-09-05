@@ -1,9 +1,10 @@
-from pjon_python import pjon_protocol_constants
-from pjon_python import crc8
 import logging
-import time
-import random
 import math
+import random
+import time
+
+from pjon_python.protocol import pjon_protocol_constants
+from pjon_python.utils import crc8
 
 try:
     xrange
@@ -383,7 +384,7 @@ class PjonProtocol(object):
 
         if response != pjon_protocol_constants.FAIL:
             log.debug("collision or corruption; sleeping")
-            time.sleep( random.randint(0, pjon_protocol_constants.COLLISION_MAX_DELAY/1000))
+            time.sleep(random.randint(0, pjon_protocol_constants.COLLISION_MAX_DELAY / 1000))
 
             # FIXME: original PJON lib does not return anything
             return pjon_protocol_constants.BUSY
