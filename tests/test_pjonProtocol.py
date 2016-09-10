@@ -136,7 +136,7 @@ class TestPjonProtocol(TestCase):
             proto.receiver_function(self.print_args)
             proto._received_packets_buffer_length = 8
 
-            timeout = 0.05
+            timeout = 0.15
             start_ts = time.time()
             while True:
                 proto.receive()
