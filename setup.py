@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 setup(
   name='pjon_python',
   packages=['pjon_python', 'pjon_python.protocol', 'pjon_python.strategies', 'pjon_python.utils'],
