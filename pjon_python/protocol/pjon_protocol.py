@@ -101,6 +101,7 @@ class OutgoingPacket(object):
         self.header = None
         self.content = None
         self.device_id = None
+        self.sender_id = None
         self.length = None
         self.state = 0
         self.registration = None
@@ -114,7 +115,7 @@ class OutgoingPacket(object):
 class PjonProtocol(object):
     def __init__(self, device_id, strategy):
         self._acknowledge = True
-        self._sender_info = False
+        self._sender_info = True
         self._router = False
         self._strategy = strategy
         self._device_id = device_id
@@ -329,8 +330,11 @@ class PjonProtocol(object):
                     self.strategy.send_response(pjon_protocol_constants.NAK)
             return pjon_protocol_constants.NAK
 
-    def send_string(self, recipient_id, string_to_send, string_length=None, packet_header=0):
+    def send_string(self, recipient_id, string_to_send, sender_id=None, string_length=None, packet_header=None):
         log.debug("send_string to device: %s payload: %s header: %s" % (recipient_id, string_to_send, packet_header))
+        if packet_header is None:
+            packet_header = self.get_header_from_internal_config()
+
         if string_length is None:
             log.debug("calculating str length")
             string_length = len(string_to_send)
@@ -343,15 +347,21 @@ class PjonProtocol(object):
             log.debug("HALF_DUPLEX and BUSY: ret BUSY")
             return pjon_protocol_constants.BUSY
 
+        includes_sender_info = packet_header & pjon_protocol_constants.SENDER_INFO_BIT
+
         CRC = 0
 
         # Transmit recipient device id
         self.strategy.send_byte(recipient_id)
         CRC = self.compute_crc_8_for_byte(recipient_id, CRC)
 
+        packet_meta_size_bytes = 4
+        if includes_sender_info:
+            packet_meta_size_bytes += 1
+
         # Transmit packet length
-        self.strategy.send_byte(string_length + 4)
-        CRC = self.compute_crc_8_for_byte(string_length + 4, CRC)
+        self.strategy.send_byte(string_length + packet_meta_size_bytes)
+        CRC = self.compute_crc_8_for_byte(string_length + packet_meta_size_bytes, CRC)
 
         # Transmit header header
         self.strategy.send_byte(packet_header)
@@ -360,6 +370,11 @@ class PjonProtocol(object):
         ''' If an id is assigned to the bus, the packet's content is prepended by
            the ricipient's bus id. This opens up the possibility to have more than
            one bus sharing the same medium. '''
+
+        # transmit sender id if included in header
+        if includes_sender_info:
+            self.strategy.send_byte(sender_id)
+            CRC = self.compute_crc_8_for_byte(sender_id, CRC)
 
         for i in xrange(string_length):
             self.strategy.send_byte(string_to_send[i])
@@ -397,7 +412,7 @@ class PjonProtocol(object):
     def send(self, recipient_id, payload):
         return self.dispatch(recipient_id, payload)
 
-    def dispatch(self, recipient_id, payload, header=None, target_net=None, timing=None):
+    def dispatch(self, recipient_id, payload, header=None, target_net=None, timing=None, forced_sender_id=None):
         if header is None:
             log.debug("getting header from internal config")
             header = self.get_header_from_internal_config()
@@ -419,6 +434,10 @@ class PjonProtocol(object):
             outgoing_packet.header = header
             outgoing_packet.content = payload
             outgoing_packet.device_id = recipient_id
+            if forced_sender_id is None:
+                outgoing_packet.sender_id = self.device_id
+            else:
+                outgoing_packet.sender_id = forced_sender_id
             outgoing_packet.length = len(payload)
             outgoing_packet.state = pjon_protocol_constants.TO_BE_SENT
             outgoing_packet.registration = time.time()
@@ -481,6 +500,7 @@ class PjonProtocol(object):
                 log.debug("   sending packet with header: %s" % outgoing_packet.header)
                 outgoing_packet.state = self.send_string(outgoing_packet.device_id,
                                                          outgoing_packet.content,
+                                                         sender_id=outgoing_packet.sender_id,
                                                          packet_header=outgoing_packet.header)
                 log.info("  > send_string returned: %s" % outgoing_packet.state)
             else:

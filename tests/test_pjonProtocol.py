@@ -200,10 +200,12 @@ class TestPjonProtocol(TestCase):
             log.debug("<<< strategy init")
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
 
+            proto.set_sender_info(False)
+            proto.set_acknowledge(True)
             ser.read.side_effect = [chr(pjon_protocol_constants.ACK)]
             ser.inWaiting.side_effect = [0, 1]
 
-            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test"))
+            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test", sender_id=11))
 
             self.assertEquals(8, ser.write.call_count)
             self.assertEquals(1, ser.read.call_count)
@@ -214,14 +216,48 @@ class TestPjonProtocol(TestCase):
             serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
             log.debug("<<< strategy init")
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            proto.set_sender_info(False)
             proto.set_acknowledge(False)
             ser.read.side_effect = ['1']
             ser.inWaiting.side_effect = [0]
 
-            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test"))
+            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test", sender_id=2))
 
             self.assertEquals(8, ser.write.call_count)
             self.assertEquals(0, ser.read.call_count)
+
+    def test_protocol_client_should_send_packets_with_sender_info_without_ack(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            log.debug(">>> strategy init")
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            log.debug("<<< strategy init")
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            proto.set_sender_info(True)
+            proto.set_acknowledge(False)
+            ser.read.side_effect = ['1']
+            ser.inWaiting.side_effect = [0]
+
+            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test", sender_id=13))
+
+            self.assertEquals(9, ser.write.call_count)
+            self.assertEquals(0, ser.read.call_count)
+
+    def test_protocol_client_should_send_packets_with_sender_info_with_ack(self):
+        with mock.patch('serial.Serial', create=True) as ser:
+            log.debug(">>> strategy init")
+            serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(ser)
+            log.debug("<<< strategy init")
+            proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
+            proto.set_sender_info(True)
+            proto.set_acknowledge(True)
+            ser.read.side_effect = [chr(pjon_protocol_constants.ACK)]
+            ser.inWaiting.side_effect = [0, 1]
+
+            self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(1, "test", sender_id=2))
+
+            self.assertEquals(9, ser.write.call_count)
+            self.assertEquals(1, ser.read.call_count)
+
     @skip
     def test_send_string__should_send_packet_without_ack_to_real_hardware(self):
         ser = serial.Serial('COM6', 115200, write_timeout=0.2, timeout=0.5)
@@ -270,7 +306,7 @@ class TestPjonProtocol(TestCase):
 
             self.assertEquals(True, (proto.get_header_from_internal_config() & pjon_protocol_constants.ACK_REQUEST_BIT) >> proto.get_bit_index_by_value(
                 pjon_protocol_constants.ACK_REQUEST_BIT))
-            self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
+            self.assertEquals(True, (proto.get_header_from_internal_config() & pjon_protocol_constants.SENDER_INFO_BIT) >> proto.get_bit_index_by_value(
                 pjon_protocol_constants.SENDER_INFO_BIT))
             self.assertEquals(False, (proto.get_header_from_internal_config() & pjon_protocol_constants.MODE_BIT) >> proto.get_bit_index_by_value(
                 pjon_protocol_constants.MODE_BIT))

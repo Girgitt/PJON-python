@@ -69,6 +69,10 @@ class PjonBaseSerialClient(object):
         header = self._protocol.get_overridden_header(request_ack=False)
         return self._protocol.dispatch(device_id, payload, header=header)
 
+    def send_with_forced_sender_id(self, device_id, sender_id, payload):
+        header = self._protocol.get_overridden_header(include_sender_info=True)
+        return self._protocol.dispatch(device_id, payload, header=header, forced_sender_id=sender_id)
+
     def start_client(self):
         if self._started:
             log.info('client already started')
