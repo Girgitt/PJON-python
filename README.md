@@ -70,6 +70,6 @@ pjon_cli.set_receive(receive_handler)
 
 while True:
     #             recipient id   payload
-    pjon_cli.send(35,            'C123456789')
+    pjon_cli.send(35,            'C123456789')  # payload can be string or an array of bytes (or any type suitable for casting to byte)
     time.sleep(1)
 ```
