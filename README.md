@@ -17,10 +17,10 @@ PJON-python module opens popular uC platforms (Arduino, ESP8266, Teensy) to the 
  
 
 ##Current status: 
-- work in progress, minimal client operational but requires PJON with enhanced serial strategy to support multi-master operation e.g. on RS485 bus
+- work in progress, minimal client operational with PJON v4.2 or v4.3 (ThroughHardwareSerial strategy is required)
 - initially PHY abstraction to BitBang and OverSampling strategies provided by a serial-PJON bridge implemented as Arduino sketch
-- HardwareSerial strategy for HALF_DUPLEX, multi-master communication mode e.g. over RS485 bus is provided directly (serial-RS485 converter required)
-- HardwareSerial strategy for SIMPLEX communication mode will be provided directly (e.g. to talk to a single Arduino).
+- support for ThroughHardwareSerial strategy in HALF_DUPLEX, multi-master communication mode e.g. over RS485 bus is provided directly (serial-RS485 converter required)
+- support for ThroughHardwareSerial strategy in SIMPLEX communication mode will be provided directly (e.g. to talk to a single Arduino).
 - Communication with a single arduino connected to USB works in HALF_DUPLEX mode out of the box without any additional hardware  
 
 ##outstading features
