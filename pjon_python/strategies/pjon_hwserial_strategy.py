@@ -30,6 +30,8 @@ class PJONserialStrategy(object):
             # time.sleep(3)
             self._ser.flushInput()
             self._ser.flushOutput()
+            self._read_buffer = []
+            self._READ_BUFFER_SIZE = 32768
 
         self._last_received_ts = 0
 
@@ -65,6 +67,9 @@ class PJONserialStrategy(object):
     def receive_byte(self, is_ack_response=False):
         # FIXME: move serial port reading to thread reading input to queue and change receive_byte to read from queue
         ##log.debug("    >>> rcv byte")
+        if len(self._read_buffer) > 0:
+            return self._read_buffer.pop()
+
         start_time = time.time()
         receive_wait_time = THROUGH_HARDWARE_SERIAL_MAX_TIME_TO_WAIT_FOR_INCOMING_BYTE
         if is_ack_response:
@@ -75,11 +80,17 @@ class PJONserialStrategy(object):
                     bytes_waiting = self._ser.inWaiting()
                     if bytes_waiting > 0:  #  bug in pyserial? for single byte 0 is returned
                         #log.debug("     >> waiting bytes: %s" % bytes_waiting)
-                        rcv_val = self._ser.read(1)
-                        if rcv_val != '':
-                            ##log.debug("      > received byte: %s (%s)" % (ord(rcv_val), rcv_val))
-                            self._last_received_ts = time.time()
-                            return ord(rcv_val)
+                        rcv_vals = self._ser.read(size=bytes_waiting)
+                        for rcv_val in rcv_vals:
+                            if rcv_val != '':
+                                ##log.debug("      > received byte: %s (%s)" % (ord(rcv_val), rcv_val))
+                                self._last_received_ts = time.time()
+                                self._read_buffer.append(ord(rcv_val))
+                    if len(self._read_buffer) > 0:
+                        if len(self._read_buffer) > self._READ_BUFFER_SIZE:
+                            log.error("serial read buffer over max size trimming last bytes")
+                            self._read_buffer = self._read_buffer[:self._READ_BUFFER_SIZE]
+                        return self._read_buffer.pop()
                     time.sleep(0.001)
             except StopIteration:  # needed for mocking in unit tests
                 pass
