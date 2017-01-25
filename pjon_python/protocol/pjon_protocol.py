@@ -254,7 +254,7 @@ class PjonProtocol(object):
                 return pjon_protocol_constants.FAIL
 
             if i == 0 and data[i] != self._device_id and data[i] != pjon_protocol_constants.BROADCAST and not self.router:
-                log.debug("  > returning busy; packet for someone else")
+                log.debug("  > returning busy; packet for someone else [i: %s, sreceiver: %s target: %s]" % (i, self._device_id, data[i]))
                 return pjon_protocol_constants.BUSY
 
             if i == 1:
@@ -292,6 +292,7 @@ class PjonProtocol(object):
         log.info(" >> calc CRC: %s" % CRC)
 
         if data[-1] == CRC:
+            log.debug("CRC OK")
             if acknowledge_requested and data[0] != pjon_protocol_constants.BROADCAST and self.mode != pjon_protocol_constants.SIMPLEX:
                 if not self.shared or (self.shared and shared and self.bus_id_equality(data + 3, self.bus_id)):
                     self.strategy.send_response(pjon_protocol_constants.ACK)
@@ -333,6 +334,7 @@ class PjonProtocol(object):
     def send_string(self, recipient_id, string_to_send, sender_id=None, string_length=None, packet_header=None):
         log.debug("send_string to device: %s payload: %s header: %s" % (recipient_id, string_to_send, packet_header))
         if packet_header is None:
+            log.warning("send_string: packed_header is None")
             packet_header = self.get_header_from_internal_config()
 
         if string_length is None:
@@ -382,9 +384,15 @@ class PjonProtocol(object):
 
         self.strategy.send_byte(CRC)
 
-        # FIXME: any reason why not take ack requirement from the header?
-        if (not self._acknowledge) or (recipient_id == pjon_protocol_constants.BROADCAST) or (self.mode == pjon_protocol_constants.SIMPLEX):
-            log.debug("no ACK required; not BROADCAST; or SIMPLEX; ret ACK")
+        if not (packet_header & pjon_protocol_constants.ACK_REQUEST_BIT > 0):
+            log.debug("packet_header: %s" % packet_header)
+            log.debug("no ACK required; ret ACK")
+            return pjon_protocol_constants.ACK
+        if (recipient_id == pjon_protocol_constants.BROADCAST):
+            log.debug("BROADCAST; ret ACK")
+            return pjon_protocol_constants.ACK
+        if (self.mode == pjon_protocol_constants.SIMPLEX):
+            log.debug("SIMPLEX; ret ACK")
             return pjon_protocol_constants.ACK
 
         log.debug(">>> receiving response")
@@ -414,7 +422,7 @@ class PjonProtocol(object):
 
     def dispatch(self, recipient_id, payload, header=None, target_net=None, timing=None, forced_sender_id=None):
         if header is None:
-            log.debug("getting header from internal config")
+            log.debug("dispatch: getting header from internal config")
             header = self.get_header_from_internal_config()
 
         payload_length = len(payload)

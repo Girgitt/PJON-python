@@ -1,16 +1,13 @@
-import logging
 import time
-from threading import Thread
-
 import serial
+import logging
+import fakeredis
+from threading import Thread
+from pjon_python.utils import fakeserial
 
 from pjon_python.protocol import pjon_protocol
-from pjon_python.strategies import pjon_hwserial_strategy
 from pjon_python.utils import serial_utils, crc8
-
-"""
-NOT IMPLEMENTED; it's just fooling around; refer to pjon_protocol for working implementation
-"""
+from pjon_python.strategies import pjon_hwserial_strategy
 
 bridge_id_response = [hex(ord(item)) for item in 'i_am_serial2pjon']
 bridge_id_query = [hex(ord(item)) for item in 'are_you_serial2pjon']
@@ -26,12 +23,13 @@ class PjonIoUpdateThread(Thread):
     def run(self):
         iter_cnt = 0
         while True:
-            if iter_cnt % 1 == 0:
-                self._pjon_protocol.update()
+            #if iter_cnt % 1 == 0:
+            self._pjon_protocol.update()
             self._pjon_protocol.receive()
-            time.sleep(0.001)
+            #time.sleep(0.0008)
             iter_cnt += 1
 
+fake_redis_cli = fakeredis.FakeStrictRedis()
 
 class PjonBaseSerialClient(object):
     """
@@ -41,15 +39,23 @@ class PjonBaseSerialClient(object):
     If com port is not specified it's assumed serial2pjon proxy is used and all available
     COM ports are scanned trying to discover the proxy.
     """
-    def __init__(self, bus_addr=1, com_port=None, baud=115200, write_timeout=0.2, timeout=0.2):
+    def __init__(self, bus_addr=1, com_port=None, baud=115200, write_timeout=0.005, timeout=0.005, transport=None):
         if com_port is None:
             raise NotImplementedError("COM port not defined and serial2proxy not supported yet")
             #self._com_port = self.discover_proxy()
         available_com_ports = serial_utils.get_serial_ports()
-        if com_port not in available_com_ports:
-            raise EnvironmentError("specified COM port is one of available ports: %s" % available_com_ports)
+        if com_port != 'fakeserial':
+            if com_port not in available_com_ports:
+                raise EnvironmentError("specified COM port is one of available ports: %s" % available_com_ports)
 
-        self._serial = serial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout)
+            self._serial = serial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout)
+        else:
+            if transport is None:
+                self._serial = fakeserial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout,
+                                                 transport=fake_redis_cli)
+            else:
+                self._serial = fakeserial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout,
+                                                 transport=transport)
 
         serial_hw_strategy = pjon_hwserial_strategy.PJONserialStrategy(self._serial)
         self._protocol = pjon_protocol.PjonProtocol(bus_addr, strategy=serial_hw_strategy)
@@ -66,7 +72,9 @@ class PjonBaseSerialClient(object):
         return self._protocol.send(device_id, payload)
 
     def send_without_ack(self, device_id, payload):
+        log.debug("send_without_ack: crafting header >")
         header = self._protocol.get_overridden_header(request_ack=False)
+        log.debug("send_without_ack: crafting header <")
         return self._protocol.dispatch(device_id, payload, header=header)
 
     def send_with_forced_sender_id(self, device_id, sender_id, payload):
