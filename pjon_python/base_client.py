@@ -1,3 +1,4 @@
+import sys
 import time
 import serial
 import logging
@@ -48,7 +49,15 @@ class PjonBaseSerialClient(object):
             if com_port not in available_com_ports:
                 raise EnvironmentError("specified COM port is one of available ports: %s" % available_com_ports)
 
-            self._serial = serial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout)
+            if sys.platform.startswith('win'):
+                self._serial = serial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout)
+            elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
+                self._serial = serial.Serial(com_port, baud, writeTimeout=write_timeout, timeout=timeout)
+            elif sys.platform.startswith('darwin'):
+                self._serial = serial.Serial(com_port, baud, writeTimeout=write_timeout, timeout=timeout)
+            else:
+                raise EnvironmentError('Unsupported platform')
+
         else:
             if transport is None:
                 self._serial = fakeserial.Serial(com_port, baud, write_timeout=write_timeout, timeout=timeout,
