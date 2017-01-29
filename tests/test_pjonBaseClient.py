@@ -13,7 +13,7 @@ def skip_if_condition(condition, reason):
         @wraps(f)
         def wrapper(self, *args, **kwargs):
             if condition:
-                skip(reason)
+                self.skipTest(reason)
             else:
                 f(self, *args, **kwargs)
         return wrapper
