@@ -8,7 +8,7 @@ import logging
 log = logging.getLogger("tests")
 
 
-def skipIfCondition(condition, reason):
+def skip_if_condition(condition, reason):
     def deco(f):
         @wraps(f)
         def wrapper(self, *args, **kwargs):
@@ -36,7 +36,7 @@ class TestPjonBaseClient(TestCase):
         time.sleep(.4)
         self.assertEquals(2, len(self.cli_2._protocol._stored_received_packets))
 
-    @skipIfCondition(platform.platform().find('armv') > 0, 'skipping on ARM due to performance')
+    @skip_if_condition(platform.platform().find('armv') > 0, 'skipping on ARM due to performance')
     def test_fake_serial_should_pass_messages_between_clients_with_ack(self):
         self.cli_1.send(2, 'test1')
         self.cli_1.send(2, 'test2')
