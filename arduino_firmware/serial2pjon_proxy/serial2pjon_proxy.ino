@@ -8,8 +8,8 @@ SoftwareSerial sSerial(10, 11); // RX, TX
 //PJON<ThroughHardwareSerialRs485AutoTx> bus(45);
 //PJON<ThroughHardwareSerialRs485AutoTx> bus_hw(35);
 
-PJON<ThroughHardwareSerial> bus(45);
-PJON<ThroughHardwareSerial> bus_hw(35);
+PJON<ThroughSerial> bus(45);
+PJON<ThroughSerial> bus_hw(35);
 
 long start_ts;
 int last_received_address = 0;
@@ -18,7 +18,7 @@ void setup() {
   pinModeFast(13, OUTPUT);
   digitalWriteFast(13, LOW); // Initialize LED 13 to be off
  
-  bus.set_pins(2, 1);
+  //bus.set_pins(2, 1);
   //bus.set_rx_vcc_pin(12);
   bus.set_receiver(receiver_function);
   bus_hw.set_receiver(receiver_function_hw);
@@ -34,7 +34,7 @@ void setup() {
   
   //bus.include_sender_info(false);
     //bus.set_acknowledge(false);
-    bus_hw.set_acknowledge(true);
+   //bus_hw.set_acknowledge(true);
   //bus.set_packet_auto_deletion(true);
   //bus.set_router(false);
 
