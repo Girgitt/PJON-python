@@ -2,6 +2,12 @@ from unittest import TestCase, skip
 from pjon_python import base_client
 
 import time
+import platform
+
+def skipIf(condition, reason):
+    if condition:
+        return skip(reason)
+    return _id
 
 
 class TestPjonBaseClient(TestCase):
@@ -19,6 +25,7 @@ class TestPjonBaseClient(TestCase):
         time.sleep(.4)
         self.assertEquals(2, len(self.cli_2._protocol._stored_received_packets))
 
+    @skipIf(platform.platform().find('armv7'), 'skipping on ARM due to performance')
     def test_fake_serial_should_pass_messages_between_clients_with_ack(self):
         self.cli_1.send(2, 'test1')
         self.cli_1.send(2, 'test2')
