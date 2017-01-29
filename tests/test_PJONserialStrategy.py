@@ -30,7 +30,7 @@ class TestPJONserialStrategy(TestCase):
             self.assertRaises(UnsupportedPayloadType, serial_strategy.send_byte, 'abc')
             self.assertRaises(UnsupportedPayloadType, serial_strategy.send_byte, [1, 2])
             self.assertRaises(UnsupportedPayloadType, serial_strategy.send_byte, {'a': 'b'})
-    @skip
+    @skip("skipped because receive buffer was disabled")
     def test_serial_client_should_read_all_available_bytes_to_receive_buffer(self):
         with mock.patch('serial.Serial', create=True) as ser:
             def arr_return(size):
@@ -48,7 +48,8 @@ class TestPJONserialStrategy(TestCase):
             self.assertEquals(len(serial_strategy._read_buffer), 1)
             self.assertEquals(serial_strategy.receive_byte(), 45)
             self.assertEquals(len(serial_strategy._read_buffer), 0)
-    @skip
+
+    @skip("skipped because receive buffer was disabled")
     def test_serial_client_should_trim_serial_buffer(self):
         with mock.patch('serial.Serial', create=True) as ser:
             serial_strategy = PJONserialStrategy(serial_port=ser)

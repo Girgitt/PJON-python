@@ -149,7 +149,7 @@ class TestPjonProtocol(TestCase):
             self.assertEquals([65, 65, 65, 65], proto._stored_received_packets[-1].payload)
             self.assertEquals(9, proto._stored_received_packets[-1].packet_length)
 
-    @skip
+    @skip("hardware-dependant test skipped")
     def test_receive_should_get_packets_from_real_hardware(self):
         ser = serial.Serial('COM31', 115200, write_timeout=0.2, timeout=0.5)
 
@@ -171,7 +171,7 @@ class TestPjonProtocol(TestCase):
         self.assertEquals([65, 65, 65, 65], proto._stored_received_packets[-1].payload)
         self.assertEquals(9, proto._stored_received_packets[-1].packet_length)
 
-    @skip
+    @skip("hardware-dependant test skipped")
     def test_receive_should_get_packets_from_real_hardware_2(self):
         ser = serial.Serial('COM6', 115200, write_timeout=0.2, timeout=0.5)
         time.sleep(2.5)
@@ -258,7 +258,7 @@ class TestPjonProtocol(TestCase):
             self.assertEquals(9, ser.write.call_count)
             self.assertEquals(1, ser.read.call_count)
 
-    @skip
+    @skip("hardware-dependant test skipped")
     def test_send_string__should_send_packet_without_ack_to_real_hardware(self):
         ser = serial.Serial('COM6', 115200, write_timeout=0.2, timeout=0.5)
         ser.flushInput()
@@ -275,7 +275,7 @@ class TestPjonProtocol(TestCase):
 
         self.assertEquals(pjon_protocol_constants.ACK, proto.send_string(35, "C123"))
 
-    @skip
+    @skip("hardware-dependant test skipped")
     def test_send_string__should_send_packet_with_ack_to_real_hardware(self):
         ser = serial.Serial('COM6', 115200, write_timeout=0.2, timeout=0.5)
         ser.flushInput()
