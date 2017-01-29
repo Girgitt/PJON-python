@@ -1,17 +1,28 @@
 from unittest import TestCase, skip
+from unittest2.compatibility import wraps
 from pjon_python import base_client
 
 import time
 import platform
+import logging
+log = logging.getLogger("tests")
 
-def skipIf(condition, reason):
-    if condition:
-        return skip(reason)
-    return _id
+
+def skipIfCondition(condition, reason):
+    def deco(f):
+        @wraps(f)
+        def wrapper(self, *args, **kwargs):
+            if condition:
+                skip(reason)
+            else:
+                f(self, *args, **kwargs)
+        return wrapper
+    return deco
 
 
 class TestPjonBaseClient(TestCase):
     def setUp(self):
+        self.is_arm = True if platform.platform().find('armv') > 0 else False
         self.cli_1 = base_client.PjonBaseSerialClient(bus_addr=1, com_port='fakeserial')
         self.cli_1.start_client()
         self.cli_2 = base_client.PjonBaseSerialClient(bus_addr=2, com_port='fakeserial')
@@ -25,7 +36,7 @@ class TestPjonBaseClient(TestCase):
         time.sleep(.4)
         self.assertEquals(2, len(self.cli_2._protocol._stored_received_packets))
 
-    @skipIf(platform.platform().find('armv7'), 'skipping on ARM due to performance')
+    @skipIfCondition(platform.platform().find('armv') > 0, 'skipping on ARM due to performance')
     def test_fake_serial_should_pass_messages_between_clients_with_ack(self):
         self.cli_1.send(2, 'test1')
         self.cli_1.send(2, 'test2')
