@@ -417,7 +417,7 @@ class TestPjonProtocol(TestCase):
 
             self.assertEquals(2, len(proto.outgoing_packets))
             with mock.patch('pjon_python.protocol.pjon_protocol.time', create=True) as time_mock:
-                time_mock.time.side_effect = [time.time() + item for item in range(3 * pjon_protocol_constants.MAX_ATTEMPTS)]
+                time_mock.time.side_effect = [time.time() + item for item in range(5 * pjon_protocol_constants.MAX_ATTEMPTS)]
 
                 serial_hw_strategy.can_start = mock.Mock()
                 serial_hw_strategy.can_start.return_value = True
