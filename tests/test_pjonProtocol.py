@@ -96,7 +96,7 @@ class TestPjonProtocol(TestCase):
             proto = pjon_protocol.PjonProtocol(1, strategy=serial_hw_strategy)
             proto.receiver_function(self.print_args)
 
-            timeout = 0.08
+            timeout = 0.28
             start_ts = time.time()
             while True:
                 proto.receive()
@@ -136,7 +136,7 @@ class TestPjonProtocol(TestCase):
             proto.receiver_function(self.print_args)
             proto._received_packets_buffer_length = 8
 
-            timeout = 0.15
+            timeout = 1.15
             start_ts = time.time()
             while True:
                 proto.receive()
