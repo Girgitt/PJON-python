@@ -117,6 +117,37 @@ class PjonPiperClient(object):
 
         return False
 
+    @staticmethod
+    def is_string_valid_com_port_name(com_name):
+        try:
+            if sys.platform == 'win32':
+                if com_name.upper().startswith('COM'):
+                    if not com_name.upper().endswith(' '):
+                        if len(com_name) in (4, 5):
+                            if 1 <= int(com_name.upper().split("COM")[-1]) <= 99:
+                                log.debug("COM name matches expected form for Windows OS")
+                                return True
+                            else:
+                                log.debug("com number outside 1-99")
+                        else:
+                            log.debug("wrong length: %s" % len(com_name))
+                    else:
+                        log.debug("ends with space")
+                else:
+                    log.debug("not starts with COM")
+            else:
+                raise NotImplementedError("platform not supported; currently provided support only for: win32")
+        except ValueError:
+            pass
+
+        return False
+
+    @staticmethod
+    def is_string_valid_pjon_piper_version(version_str):
+        if version_str.upper().startswith('VERSION:'):
+            return True
+        return False
+
     def get_coms(self):
         close_fds = False if sys.platform == 'win32' else True
 
@@ -141,6 +172,24 @@ class PjonPiperClient(object):
         cmd_subprc_pipe.terminate()
 
         return coms
+
+    def get_pjon_piper_version(self):
+        close_fds = False if sys.platform == 'win32' else True
+
+        cmd_subprc_pipe = subprocess.Popen("%s version" % self._pjon_piper_path, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+
+        log.debug(">> cmd pipe out")
+        while cmd_subprc_pipe:
+            nex_tline = cmd_subprc_pipe.stdout.readline()
+            if nex_tline == '':
+                break
+            possible_version_output = nex_tline.strip()
+            if self.is_string_valid_pjon_piper_version(possible_version_output):
+                possible_version_output = possible_version_output.split("VERSION:")[-1].strip()
+        log.debug("<< cmd pipe out")
+        cmd_subprc_pipe.terminate()
+
+        return possible_version_output
 
 
     """
