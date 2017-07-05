@@ -60,7 +60,9 @@ PJON v4.2
 
 '''
 
+
 class PacketInfo(object):
+    id = 0
     header = 0
     receiver_id = 0
     receiver_bus_id = [0, 0, 0, 0]
@@ -83,6 +85,18 @@ class ReceivedPacket(object):
     @property
     def payload(self):
         return self._payload
+
+    @property
+    def payload_as_string(self):
+        return self.payload
+
+    @property
+    def payload_as_chars(self):
+        return [item for item in self._payload]
+
+    @property
+    def payload_as_bytes(self):
+        return [ord(item) for item in self._payload]
 
     @property
     def packet_length(self):

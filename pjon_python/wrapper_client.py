@@ -31,6 +31,8 @@ import psutil
 import logging
 import threading
 import subprocess
+from pjon_python.protocol.pjon_protocol import PacketInfo
+from pjon_python.protocol.pjon_protocol import ReceivedPacket
 
 try:
     from Queue import Queue, Empty
@@ -49,13 +51,17 @@ class ComPortNotAvailableExc(Exception):
     pass
 
 
-class PjonPiperClient(object):
+class PjonPiperClient(threading.Thread):
     def __init__(self, bus_addr=1, com_port=None, baud=115200):
+        super(PjonPiperClient, self).__init__()
         self._pipe = None
         self._bus_addr = bus_addr
         self._serial_baud = baud
         self._piper_client_stdin_queue = Queue()
         self._piper_client_stdout_queue = Queue()
+        self._receiver_function = self.dummy_receiver
+        self._error_function = self.dummy_error
+
 
         if sys.platform == 'win32':
             self._startupinfo = subprocess.STARTUPINFO()
@@ -80,6 +86,7 @@ class PjonPiperClient(object):
                                                 stdin_queue=self._piper_client_stdin_queue,
                                                 stdout_queue=self._piper_client_stdout_queue)
 
+        self._packets_processor = ReceivedPacketsProcessor(self)
         # TODO:
             # 1. start pjon-piper in a watchdog thread and pass input/output queues
             # 2. implement send / receive methods
@@ -147,6 +154,20 @@ class PjonPiperClient(object):
             return True
         return False
 
+    @staticmethod
+    def dummy_receiver(*args, **kwargs):
+        pass
+
+    @staticmethod
+    def dummy_error(*args, **kwargs):
+        pass
+
+    def set_receiver(self, receiver_function):
+        self._receiver_function = receiver_function
+
+    def set_error(self, error_function):
+        self._error_function = error_function
+
     def get_coms(self):
         close_fds = False if sys.platform == 'win32' else True
 
@@ -194,18 +215,116 @@ class PjonPiperClient(object):
         return possible_version_output
 
     def start_client(self):
-        return self._pipier_client_watchdog.start()
+        self._pipier_client_watchdog.start()
+        self._packets_processor.start()
+        return True
 
     def stop_client(self):
-        return self._pipier_client_watchdog.stop()
+        self._pipier_client_watchdog.stop()
+        self._packets_processor.stop()
+        return True
 
     def send(self, device_id, payload):
-        log.info("sending %s to %s" % (payload, device_id))
+        log.debug("sending %s to %s" % (payload, device_id))
         self._piper_client_stdin_queue.put("send %s data=%s" % (device_id, payload))
+
+    def send_without_ack(self, device_id, payload):
+        log.debug("sending %s to %s" % (payload, device_id))
+        self._piper_client_stdin_queue.put("send_noack %s data=%s" % (device_id, payload))
+
+
+class ReceivedPacketsProcessor(threading.Thread):
+    def __init__(self, parent):
+        super(ReceivedPacketsProcessor, self).__init__()
+        self._parent = parent
+        self.setDaemon(True)
+        self._stopped = False
+        self.name = "piper packets processor"
+
+    def run(self):
+        try:
+            while True:
+                try:
+                    if self._stopped:
+                        return
+                    line = self._parent._piper_client_stdout_queue.get(timeout=0.01)
+                    if len(line) > 1:
+                        line = line.strip()
+                        log.debug('%s: %s', self.getName(), line)
+                        if self.is_text_line_received_packet_info(line):
+                            log.debug('%s: %s', self.getName(), line)
+                            try:
+                                packet = self.get_packet_info_obj_for_packet_string(line)
+                                if packet.packet_length == len(packet.payload):
+                                    payload = packet.payload_as_string
+                                    packet_length = packet.packet_length
+                                    packet_info = packet.packet_info
+                                    self._parent._receiver_function(payload, packet_length, packet_info)
+                                else:
+                                    log.error("incorrect payload length for rcv string %s" % line)
+                            except ValueError:
+                                log.exception("could not process incomming paket str")
+                            finally:
+                                pass
+
+
+                except Empty:
+                    continue
+
+                except (IOError, AttributeError):
+                    break
+        except KeyboardInterrupt:
+            pass
+
+    def stop(self, skip_confirmation=False):
+        self._stopped = True
+
+    @staticmethod
+    def is_text_line_received_packet_info(text_line):
+        if text_line.strip().startswith("rcvd"):
+            return True
+        return False
+
+    @staticmethod
+    def get_from_packet_string__snd_id(packet_string):
+        return int(packet_string.split("snd_id=")[-1].split(" ")[0])
+
+    @staticmethod
+    def get_from_packet_string__snd_net(packet_string):
+        net_str = packet_string.split("snd_net=")[-1].split(" ")[0]
+        return [int(item) for item in net_str.split(".")]
+
+    @staticmethod
+    def get_from_packet_string__rcv_id(packet_string):
+        return int(packet_string.split("rcv_id=")[-1].split(" ")[0])
+
+    @staticmethod
+    def get_from_packet_string__rcv_net(packet_string):
+        net_str = packet_string.split("rcv_net=")[-1].split(" ")[0]
+        return [int(item) for item in net_str.split(".")]
+
+    @staticmethod
+    def get_from_packet_string__data_len(packet_string):
+        return int(packet_string.split("len=")[-1].split(" ")[0])
+
+    @staticmethod
+    def get_from_packet_string__data(packet_string):
+        return packet_string.split("data=")[-1]
+
+    def get_packet_info_obj_for_packet_string(self, packet_str):
+        packet_info = PacketInfo()
+        PacketInfo.receiver_id = self.get_from_packet_string__rcv_id(packet_str)
+        PacketInfo.receiver_bus_id = self.get_from_packet_string__rcv_net(packet_str)
+        PacketInfo.sender_id = self.get_from_packet_string__snd_id(packet_str)
+        PacketInfo.sender_bus_id = self.get_from_packet_string__snd_net(packet_str)
+        payload = self.get_from_packet_string__data(packet_str)
+        length = self.get_from_packet_string__data_len(packet_str)
+
+        return ReceivedPacket(payload=payload, packet_length=length, packet_info=packet_info)
 
 
 class WatchDog(threading.Thread):
-    TICK_SECONDS = .2
+    TICK_SECONDS = .01
     START_SECONDS_DEFAULT = 2
 
     def __init__(self, suproc_command, stdin_queue, stdout_queue):
@@ -239,7 +358,7 @@ class WatchDog(threading.Thread):
             while True:
                 try:
                     if self._stoped:
-                        self.log.log(1000, "killing within thread run")
+                        self.log.debug("killing within thread run")
                         self._pipe.terminate()
                         self._pipe = None
                         return True
@@ -256,13 +375,7 @@ class WatchDog(threading.Thread):
                                 self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
                                 self._birthtime = time.time()
                         else:
-                            try:
-                                line = self._stdout_queue.get_nowait()
-                                if len(line) > 1:
-                                    #print line.strip()
-                                    self.log.log(100, '%s: %s', self.getName(), line.strip())
-                            except Empty:
-                                pass
+                            pass
                     time.sleep(self.TICK_SECONDS)
 
                 except Exception as e:
@@ -291,6 +404,10 @@ class WatchDog(threading.Thread):
         stdin_thd = threading.Thread(target=self.attach_queue_to_stdin)
         stdin_thd.daemon = True
         stdin_thd.start()
+
+        #stdout_process_thd = threading.Thread(target=self.process_stdout_output)
+        #stdout_process_thd.daemon = True
+        #stdout_process_thd.start()
 
         return True
 
@@ -326,7 +443,7 @@ class WatchDog(threading.Thread):
         start_ts = time.time()
         while time.time() - start_ts < self.START_SECONDS_DEFAULT:
             if self._pipe is not None:
-                self.log.log(2000, "attaching queue to stdout")
+                self.log.debug("attaching queue to stdout")
                 while True:
                     try:
                         if self._stoped:
@@ -350,20 +467,18 @@ class WatchDog(threading.Thread):
         while time.time() - start_ts < self.START_SECONDS_DEFAULT:
             try:
                 if self._pipe is not None:
-                    self.log.log(2000, "attaching queue to stdin")
+                    self.log.debug("attaching queue to stdin")
                     while True:
                         try:
                             if self._stoped:
                                 break
-                            input_cmd = self._stdin_queue.get(timeout=.1)
+                            input_cmd = self._stdin_queue.get(timeout=.01)
                             if input_cmd == '':  # and self._pipe.poll() is not None:
                                 continue
                             self._pipe.stdin.write(input_cmd+'\n')
                             self._pipe.stdin.flush()
                             continue
                         except Empty:
-                            #self._pipe.stdin.write('\n')
-                            #self._pipe.stdin.flush()
                             continue
                         except (IOError, AttributeError):
                             break
