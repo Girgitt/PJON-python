@@ -263,10 +263,19 @@ class ReceivedPacketsProcessor(threading.Thread):
                                 else:
                                     log.error("incorrect payload length for rcv string %s" % line)
                             except ValueError:
-                                log.exception("could not process incomming paket str")
+                                log.exception("could not process incoming paket str")
                             finally:
                                 pass
+                        elif self.is_text_line_received_error_info(line):
+                            try:
+                                error_code = self.get_from_error_string__code(line)
+                                error_data = self.get_from_error_string__data(line)
+                                self._parent._error_function(error_code, error_data)
 
+                            except ValueError:
+                                log.exception("could not process incoming paket str")
+                            finally:
+                                pass
 
                 except Empty:
                     continue
@@ -280,8 +289,22 @@ class ReceivedPacketsProcessor(threading.Thread):
         self._stopped = True
 
     @staticmethod
+    def is_text_line_received_error_info(text_line):
+        if text_line.strip().startswith("#ERR"):
+            return True
+        return False
+
+    @staticmethod
+    def get_from_error_string__code(packet_string):
+        return int(packet_string.split("code=")[-1].split(" ")[0])
+
+    @staticmethod
+    def get_from_error_string__data(packet_string):
+        return int(packet_string.split("data=")[-1])
+
+    @staticmethod
     def is_text_line_received_packet_info(text_line):
-        if text_line.strip().startswith("rcvd"):
+        if text_line.strip().startswith("#RCV"):
             return True
         return False
 

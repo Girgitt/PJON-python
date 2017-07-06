@@ -6,18 +6,31 @@ import mock
 
 class TestPipierClientPacketsProcessor(TestCase):
     def setUp(self):
-        self.valid_packet_str = "rcvd snd_id=44 snd_net=204.204.204.204 rcv_id=45 rcv_net=205.205.205.205 id=0 hdr=6 pckt_cnt=38 len=8 data=ABC test"
+        self.valid_packet_str = "#RCV snd_id=44 snd_net=204.204.204.204 rcv_id=45 rcv_net=205.205.205.205 id=0 hdr=6 pckt_cnt=38 len=8 data=ABC test"
+        self.valid_error_str = "#ERR code=5 data=10"
         with mock.patch('pjon_python.wrapper_client.PjonPiperClient.get_coms', create=True) as get_coms_mock:
             get_coms_mock.return_value=["test"]
             with mock.patch('pjon_python.wrapper_client.PjonPiperClient.Watchdog', create=True) as watchdog_mock:
                 self._rcvd_packets_processor = ReceivedPacketsProcessor(PjonPiperClient(com_port="test"))
+
+    def test_is_text_line_received_error_info__should_detect_error_lines(self):
+        self.assertFalse(self._rcvd_packets_processor.is_text_line_received_error_info(" "))
+        self.assertFalse(self._rcvd_packets_processor.is_text_line_received_error_info("error something"))
+
+        self.assertTrue(self._rcvd_packets_processor.is_text_line_received_error_info("#ERR something"))
+
+    def test_get_from_error_string_code(self):
+        self.assertEqual(5, self._rcvd_packets_processor.get_from_error_string__code(self.valid_error_str))
+
+    def test_get_from_error_string_data(self):
+        self.assertEqual(10, self._rcvd_packets_processor.get_from_error_string__data(self.valid_error_str))
 
     def test__is_text_line_received_packet_info__should_detect_rcvd_lines(self):
 
         self.assertFalse(self._rcvd_packets_processor.is_text_line_received_packet_info(" "))
         self.assertFalse(self._rcvd_packets_processor.is_text_line_received_packet_info("received something"))
 
-        self.assertTrue(self._rcvd_packets_processor.is_text_line_received_packet_info("rcvd something"))
+        self.assertTrue(self._rcvd_packets_processor.is_text_line_received_packet_info("#RCV something"))
 
     def test_get_from_packet_string__snd_id(self):
         self.assertEqual(44, self._rcvd_packets_processor.get_from_packet_string__snd_id(self.valid_packet_str))
