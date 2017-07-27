@@ -29,6 +29,7 @@ import sys
 import time
 import psutil
 import logging
+import platform
 import threading
 import subprocess
 from pjon_python.protocol.pjon_protocol import PacketInfo
@@ -68,6 +69,16 @@ class PjonPiperClient(threading.Thread):
             self._startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             self._startupinfo.wShowWindow = subprocess.SW_HIDE
             self._pjon_piper_path = os.path.join(self.get_self_path(), 'pjon_piper_bin', 'win', 'PJON-piper.exe')
+        elif sys.platform == 'linux2':
+            if(self.is_arm_platform()):
+                if self.is_raspberry():
+                    self._pjon_piper_path = os.path.join(self.get_self_path(), 'pjon_piper_bin', 'rpi',
+                                                         'pjon_piper')
+                    print(self._pjon_piper_path)
+                else:
+                    NotImplementedError("Only Linux on Raspberry is supported")
+            else:
+                raise NotImplementedError("this version of Linux is not supported yet")
         else:
             raise NotImplementedError("platform not supported; currently provided support only for: win32")
 
@@ -94,8 +105,22 @@ class PjonPiperClient(threading.Thread):
             #   if not: restart watchdog (can be a permanent restart; no state machine required)
 
     @staticmethod
+    def is_raspberry():
+        call_result = subprocess.Popen(['cat', '/sys/firmware/devicetree/base/model'], stdout=subprocess.PIPE)
+        if call_result.stdout.readline().strip().lower().startswith('raspberry'):
+            return True
+        return False
+
+    @staticmethod
+    def is_arm_platform():
+        return bool(sum([item.lower().startswith('armv') for item in platform.uname()]))
+
+    @staticmethod
     def get_self_path():
-        return os.path.dirname(os.path.abspath(__file__))
+        if sys.platform == 'win32':
+            return os.path.dirname(os.path.abspath(__file__))
+        else:
+            return os.path.dirname(os.path.abspath(__file__))
 
     @staticmethod
     def is_string_valid_com_port_name(com_name):
@@ -171,7 +196,12 @@ class PjonPiperClient(threading.Thread):
     def get_coms(self):
         close_fds = False if sys.platform == 'win32' else True
 
-        cmd_subprc_pipe = subprocess.Popen("%s coms" % self._pjon_piper_path, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        if sys.platform == 'win32':
+            cmd_subprc_pipe = subprocess.Popen("%s coms" % self._pjon_piper_path, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        else:
+            cmd_subprc_pipe = subprocess.Popen([self._pjon_piper_path, "coms"], shell=False, close_fds=close_fds,
+                                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                               bufsize=0, env=os.environ)
 
         coms = []
         #log.debug(">> cmd pipe out")
