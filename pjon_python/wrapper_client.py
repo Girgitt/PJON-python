@@ -28,6 +28,7 @@ import os
 import sys
 import time
 import psutil
+import atexit
 import logging
 import platform
 import threading
@@ -62,6 +63,7 @@ class PjonPiperClient(threading.Thread):
         self._piper_client_stdout_queue = Queue()
         self._receiver_function = self.dummy_receiver
         self._error_function = self.dummy_error
+        self._last_watchdog_poll_ts = 0
 
 
         if sys.platform == 'win32':
@@ -70,11 +72,12 @@ class PjonPiperClient(threading.Thread):
             self._startupinfo.wShowWindow = subprocess.SW_HIDE
             self._pjon_piper_path = os.path.join(self.get_self_path(), 'pjon_piper_bin', 'win', 'PJON-piper.exe')
         elif sys.platform == 'linux2':
+            #os.setpgrp()
             if(self.is_arm_platform()):
                 if self.is_raspberry():
                     self._pjon_piper_path = os.path.join(self.get_self_path(), 'pjon_piper_bin', 'rpi',
                                                          'pjon_piper')
-                    print(self._pjon_piper_path)
+                    #print(self._pjon_piper_path)
                 else:
                     NotImplementedError("Only Linux on Raspberry is supported")
             else:
@@ -82,8 +85,10 @@ class PjonPiperClient(threading.Thread):
         else:
             raise NotImplementedError("platform not supported; currently provided support only for: win32")
 
-        self._pipier_client_subproc_cmd = "%s %s %s %s\n" % (self._pjon_piper_path, com_port.strip(), baud, bus_addr)
-
+        if sys.platform == 'win32':
+            self._pipier_client_subproc_cmd = "%s %s %s %s\n" % (self._pjon_piper_path, com_port.strip(), baud, bus_addr)
+        elif sys.platform == 'linux2':
+            self._pipier_client_subproc_cmd = [self._pjon_piper_path, com_port.strip(), str(baud), str(bus_addr)]
         if com_port is None:
             raise ComPortUndefinedExc("missing com_port kwarg: serial port name is required")
 
@@ -95,12 +100,14 @@ class PjonPiperClient(threading.Thread):
 
         self._pipier_client_watchdog = WatchDog(suproc_command=self._pipier_client_subproc_cmd,
                                                 stdin_queue=self._piper_client_stdin_queue,
-                                                stdout_queue=self._piper_client_stdout_queue)
+                                                stdout_queue=self._piper_client_stdout_queue,
+                                                parent = self)
 
         self._packets_processor = ReceivedPacketsProcessor(self)
-        # TODO:
-            # 1. start pjon-piper in a watchdog thread and pass input/output queues
-            # 2. implement send / receive methods
+
+        atexit.register(self.stop_client)
+
+           # TODO:
             # 3. implement periodic checks if com is available
             #   if not: restart watchdog (can be a permanent restart; no state machine required)
 
@@ -140,32 +147,9 @@ class PjonPiperClient(threading.Thread):
                         log.debug("ends with space")
                 else:
                     log.debug("not starts with COM")
-            else:
-                raise NotImplementedError("platform not supported; currently provided support only for: win32")
-        except ValueError:
-            pass
-
-        return False
-
-    @staticmethod
-    def is_string_valid_com_port_name(com_name):
-        try:
-            if sys.platform == 'win32':
-                if com_name.upper().startswith('COM'):
-                    if not com_name.upper().endswith(' '):
-                        if len(com_name) in (4, 5):
-                            if 1 <= int(com_name.upper().split("COM")[-1]) <= 99:
-                                log.debug("COM name matches expected form for Windows OS")
-                                return True
-                            else:
-                                log.debug("com number outside 1-99")
-                        else:
-                            log.debug("wrong length: %s" % len(com_name))
-                    else:
-                        log.debug("ends with space")
-                else:
-                    pass
-                    #log.debug("not starts with COM")
+            elif 'linux' in sys.platform:
+                if '/dev/tty' in com_name:
+                    return True
             else:
                 raise NotImplementedError("platform not supported; currently provided support only for: win32")
         except ValueError:
@@ -222,12 +206,25 @@ class PjonPiperClient(threading.Thread):
         #log.debug("<< cmd pipe out")
         cmd_subprc_pipe.terminate()
 
+        if coms == []:
+            log.warn("PJON-piper returned no serial ports; falling back to pyserial to enumerate available serials")
+            from serial.tools import list_ports
+            if sys.platform == 'win32':
+                coms = [item.device for item in list_ports.comports()]
+            elif sys.platform == 'linux2':
+                coms = [item[0] for item in list_ports.comports()]
+
         return coms
 
     def get_pjon_piper_version(self):
         close_fds = False if sys.platform == 'win32' else True
 
-        cmd_subprc_pipe = subprocess.Popen("%s version" % self._pjon_piper_path, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        if sys.platform == 'win32':
+            cmd_subprc_pipe = subprocess.Popen("%s version" % self._pjon_piper_path, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        elif sys.platform == 'linux2':
+            cmd_subprc_pipe = subprocess.Popen([self._pjon_piper_path, 'version'], shell=False, close_fds=close_fds,
+                                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                               bufsize=0, startupinfo=self._startupinfo, env=os.environ)
 
         possible_version_output = "unknown"
 
@@ -247,11 +244,27 @@ class PjonPiperClient(threading.Thread):
     def start_client(self):
         self._pipier_client_watchdog.start()
         self._packets_processor.start()
+        time.sleep(0.05)
+        while True:
+            if time.time() - self._pipier_client_watchdog._birthtime < self._pipier_client_watchdog.START_SECONDS_DEFAULT:
+                if self._pipier_client_watchdog._start_failed:
+                    raise Exception("client start failed; are you running as root? - needed to access serial port")
+                elif self._pipier_client_watchdog._pipe.poll() is None:
+                    break
         return True
 
     def stop_client(self):
+        log.info("..stopping client: %s" % str(self))
         self._pipier_client_watchdog.stop()
         self._packets_processor.stop()
+        try:
+            self._pipier_client_watchdog.join()
+        except RuntimeError:
+            pass
+        try:
+            self._packets_processor.join()
+        except RuntimeError:
+            pass
         return True
 
     def send(self, device_id, payload):
@@ -275,9 +288,16 @@ class ReceivedPacketsProcessor(threading.Thread):
         try:
             while True:
                 try:
+                    if self._parent._pipier_client_watchdog._start_failed:
+                        log.error("PJON-piper client start failed; Check if you run as root - needed for serial port access")
+                        self._parent.stop_client()
+                        self.stop()
+
                     if self._stopped:
                         return
+
                     line = self._parent._piper_client_stdout_queue.get(timeout=0.01)
+
                     if len(line) > 1:
                         line = line.strip()
                         log.debug('%s: %s', self.getName(), line)
@@ -380,19 +400,22 @@ class WatchDog(threading.Thread):
     TICK_SECONDS = .01
     START_SECONDS_DEFAULT = 2
 
-    def __init__(self, suproc_command, stdin_queue, stdout_queue):
+    def __init__(self, suproc_command, stdin_queue, stdout_queue, parent):
         threading.Thread.__init__(self)
-        self.setDaemon(False)
+        self.setDaemon(False) # we want it to survive parent's death so it can detect innactivity and terminate subproccess
         self.setName('pjon_piper_thd')
         self._subproc_command = suproc_command
         self._birthtime = None
-        self._stoped = False
+        self._stopped = False
+        self._start_failed = False
         self._pipe = None
         self._stdout_queue = stdout_queue
         self._stdin_queue = stdin_queue
-        self._startupinfo = subprocess.STARTUPINFO()
-        self._startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        self._startupinfo.wShowWindow = subprocess.SW_HIDE
+        self._parent = parent
+        if sys.platform == 'win32':
+            self._startupinfo = subprocess.STARTUPINFO()
+            self._startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            self._startupinfo.wShowWindow = subprocess.SW_HIDE
 
         self.log = logging.getLogger(self.name)
         self.log.handlers = []
@@ -402,7 +425,13 @@ class WatchDog(threading.Thread):
 
     def start_subproc(self):
         close_fds = False if sys.platform == 'win32' else True
-        self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        if sys.platform == 'win32':
+            self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+        elif sys.platform == 'linux2':
+            self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds,
+                                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                          bufsize=0, env=os.environ, preexec_fn=os.setpgrp)
+
         self._birthtime = time.time()
 
     def poll_on_subproc(self):
@@ -410,8 +439,8 @@ class WatchDog(threading.Thread):
         try:
             while True:
                 try:
-                    if self._stoped:
-                        self.log.debug("killing within thread run")
+                    if self._stopped:
+                        self.log.debug("poll on subproc: killing within thread run")
                         self._pipe.terminate()
                         self._pipe = None
                         return True
@@ -420,23 +449,41 @@ class WatchDog(threading.Thread):
                         if self._pipe.poll() is not None:
                             if time.time() - self._birthtime < self.START_SECONDS_DEFAULT:
                                 self.log.error('WatchDog(%r) start failed', self.getName())
-                                self._stoped = True
+                                self._stopped = True
                                 self._pipe = None
+                                self._start_failed = True
                                 return False
-                            else:
+                            elif not self._stopped:
                                 self.log.error('WatchDog(%r) is dead, restarting', self.getName())
-                                self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+                                if sys.platform == 'win32':
+                                    self._pipe = subprocess.Popen(self._subproc_command, shell=False, close_fds=close_fds, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, startupinfo=self._startupinfo, env=os.environ)
+                                elif sys.platform == 'linux2':
+                                    self._pipe = subprocess.Popen(self._subproc_command, shell=False,
+                                                                  close_fds=close_fds, stdin=subprocess.PIPE,
+                                                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                                                  bufsize=0,
+                                                                  env=os.environ)
                                 self._birthtime = time.time()
                         else:
-                            pass
+                            if time.time() - self._birthtime > 2:
+                                if time.time() - self._parent._last_watchdog_poll_ts > 2:
+                                    log.critical("parent thread not active; quitting")
+                                    self._pipe.terminate()
+                                    break
+
+                                else:
+                                    pass
+                                    #log.info("OK")
+                    self._parent._last_watchdog_poll_ts = time.time()
                     time.sleep(self.TICK_SECONDS)
 
                 except Exception as e:
                     self.log.exception('WatchDog.run error: %r', e)
+
         finally:
             try:
                 self._pipe.terminate()
-            except AttributeError:
+            except (AttributeError, OSError):
                 pass
             try:
                 psutil.Process(self._pipe.pid).kill()
@@ -466,8 +513,8 @@ class WatchDog(threading.Thread):
 
     def stop(self, skip_confirmation=False):
         try:
-            self.log.info("PID to kill: %s" % self._pipe.pid)
-            self._stoped = True
+            #self.log.info("PID to kill: %s" % self._pipe.pid)
+            self._stopped = True
 
             if skip_confirmation:
                 return True
@@ -499,7 +546,9 @@ class WatchDog(threading.Thread):
                 self.log.debug("attaching queue to stdout")
                 while True:
                     try:
-                        if self._stoped:
+                        if self._stopped:
+                            break
+                        if self._start_failed:
                             break
                         nextline = self._pipe.stdout.readline()
                         if nextline == '':# and self._pipe.poll() is not None:
@@ -523,7 +572,9 @@ class WatchDog(threading.Thread):
                     self.log.debug("attaching queue to stdin")
                     while True:
                         try:
-                            if self._stoped:
+                            if self._stopped:
+                                break
+                            if self._start_failed:
                                 break
                             input_cmd = self._stdin_queue.get(timeout=.01)
                             if input_cmd == '':  # and self._pipe.poll() is not None:
