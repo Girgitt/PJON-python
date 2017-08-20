@@ -1,5 +1,6 @@
 import time
 import json
+from redis import ConnectionError
 import logging
 import jsonpickle
 log = logging.getLogger("redis-conn")
@@ -25,7 +26,12 @@ class RedisConn(object):
 
         message = True
         while message:
-            message = self._pubsub.get_message(timeout=rcv_timeout)
+            try:
+                message = self._pubsub.get_message(timeout=rcv_timeout)
+            except ConnectionError:
+                log.error("lost connection to Redis")
+                time.sleep(1)
+                break
             if message:
                 log.debug("%s - receied pub message: %s" % (self._cli_id, message))
                 if message['type'] == 'message':

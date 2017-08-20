@@ -94,7 +94,7 @@ class OverRedisClient(object):
         self._transport.publish(packet_message)
 
     def send_without_ack(self, device_id, payload):
-        self.send_without_ack(device_id, payload)
+        self.send(device_id, payload)
 
     def send_with_forced_sender_id(self, receiver_id, sender_id, payload):
         self.send(receiver_id, payload, sender_id=sender_id)
