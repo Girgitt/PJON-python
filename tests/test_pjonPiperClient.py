@@ -3,6 +3,8 @@ from unittest import TestCase
 from pjon_python import wrapper_client
 from unittest2.compatibility import wraps
 import mock
+import time
+
 
 def skip_if_condition(condition, reason):
     def deco(f):
@@ -37,3 +39,14 @@ class TestPjonPiperClient(TestCase):
         self.assertFalse(self._pjon_wrapper_cli.is_string_valid_com_port_name(" com"))
         self.assertFalse(self._pjon_wrapper_cli.is_string_valid_com_port_name(" com3"))
         self.assertFalse(self._pjon_wrapper_cli.is_string_valid_com_port_name(" com323"))
+
+    def test_client_should_initialize_with_stdout_watchdog_disabled(self):
+        self.assertEqual(self._pjon_wrapper_cli.is_piper_stdout_watchdog_enabled, False)
+
+    def test_set_stdout_watchdog__should_change_enable_property(self):
+        self._pjon_wrapper_cli.set_piper_stdout_watchdog(timeout_sec=0.250)
+        self.assertEqual(self._pjon_wrapper_cli.is_piper_stdout_watchdog_enabled, True)
+
+    def test_reset_piper_stdout_watchdog__should_set_received_ts_to_current_time(self):
+        self._pjon_wrapper_cli.reset_piper_stdout_watchdog()
+        self.assertLess(self._pjon_wrapper_cli._piper_stdout_last_received_ts - time.time(), 2)

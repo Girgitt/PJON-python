@@ -64,6 +64,8 @@ class PjonPiperClient(threading.Thread):
         self._receiver_function = self.dummy_receiver
         self._error_function = self.dummy_error
         self._last_watchdog_poll_ts = 0
+        self._piper_stdout_watchdog_timeout = 0
+        self._piper_stdout_last_received_ts = 0
 
 
         if sys.platform == 'win32':
@@ -170,6 +172,23 @@ class PjonPiperClient(threading.Thread):
     @staticmethod
     def dummy_error(*args, **kwargs):
         pass
+
+    @property
+    def is_piper_stdout_watchdog_enabled(self):
+        if self._piper_stdout_watchdog_timeout > 0:
+            return True
+        return False
+
+    def set_piper_stdout_watchdog(self, timeout_sec=3):
+        self._piper_stdout_watchdog_timeout = timeout_sec
+
+    def reset_piper_stdout_watchdog(self):
+        self._piper_stdout_last_received_ts = time.time()
+
+    def should_piper_stdout_watchdog_issue_restart(self):
+        if time.time() - self._piper_stdout_last_received_ts > self._piper_stdout_watchdog_timeout:
+            return True
+        return False
 
     def set_receiver(self, receiver_function):
         self._receiver_function = receiver_function
@@ -312,6 +331,10 @@ class ReceivedPacketsProcessor(threading.Thread):
                                     self._parent._receiver_function(payload, packet_length, packet_info)
                                 else:
                                     log.error("incorrect payload length for rcv string %s" % line)
+
+                                if self._parent.is_piper_stdout_watchdog_enabled:
+                                    self._parent.reset_piper_stdout_watchdog()
+
                             except ValueError:
                                 log.exception("could not process incoming paket str")
                             finally:
@@ -464,8 +487,11 @@ class WatchDog(threading.Thread):
                                                                   bufsize=0,
                                                                   env=os.environ)
                                 self._birthtime = time.time()
+
+                                if self._parent.is_piper_stdout_watchdog_enabled:
+                                    self._parent.reset_piper_stdout_watchdog()
                         else:
-                            if time.time() - self._birthtime > 2:
+                            if time.time() - self._birthtime > self.START_SECONDS_DEFAULT:
                                 if time.time() - self._parent._last_watchdog_poll_ts > 2:
                                     log.critical("parent thread not active; quitting")
                                     self._pipe.terminate()
@@ -475,6 +501,13 @@ class WatchDog(threading.Thread):
                                     pass
                                     #log.info("OK")
                     self._parent._last_watchdog_poll_ts = time.time()
+
+                    if self._parent.is_piper_stdout_watchdog_enabled:
+                        if time.time() - self._birthtime > self.START_SECONDS_DEFAULT:
+                            if self._parent.should_piper_stdout_watchdog_issue_restart():
+                                log.warning("PJON-piper restart issued by stdout watchdog")
+                                self._pipe.terminate()
+
                     time.sleep(self.TICK_SECONDS)
 
                 except Exception as e:
@@ -554,6 +587,7 @@ class WatchDog(threading.Thread):
                         if nextline == '':# and self._pipe.poll() is not None:
                             continue
                         self._stdout_queue.put(nextline.strip())
+
                     except AttributeError:
                         self.log.exception("stdout queue broken")
                         break
