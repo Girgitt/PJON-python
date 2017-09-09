@@ -16,45 +16,49 @@ PJON-python module opens popular uC platforms (Arduino, ESP8266, Teensy) to the 
 - open-hardware IoT (thanks to integration flexibility of other python modules)
  
 
-##Current status: 
+## Current status: 
 - work in progress, minimal client operational with PJON v4.2 or v4.3 (ThroughHardwareSerial strategy is required)
 - initially PHY abstraction to BitBang and OverSampling strategies provided by a serial-PJON bridge implemented as Arduino sketch
 - support for ThroughHardwareSerial strategy in HALF_DUPLEX, multi-master communication mode e.g. over RS485 bus is provided directly (serial-RS485 converter required)
 - support for ThroughHardwareSerial strategy in SIMPLEX communication mode will be provided directly (e.g. to talk to a single Arduino).
 - Communication with a single arduino connected to USB works in HALF_DUPLEX mode out of the box without any additional hardware  
 
-##outstading features
-- PJON serial strategy
-  - receive without ACK from local bus [done]
-  - receive with ACK [done]
-  - send without ACK to local bus [done]
-  - send with ACK [done]
-- PJON protocol
-  - receive [done]
-  - send [done]
-  - update [done]
-  - repetitive send
-  - local bus support [done]
-  - including sender ID [done]
-  - shared bus support
-  - auto addressing (PJON v5 feature)
-- public api
-  - blocking [implementing]
-  - non-blocking [done]
-- auto-discover of serial-PJON bridge
+## Outstading features
+
+- **PJON serial strategy**
+  - [x] receive without ACK from local bus
+  - [x] receive with ACK
+  - [x] send without ACK to local bus
+  - [x] send with ACK
+
+- **PJON protocol**
+  - [x] receive
+  - [x] send
+  - [x] update
+  - [ ] repetitive send
+  - [x] local bus support
+  - [x] including sender ID
+  - [ ] shared bus support
+  - [ ] auto addressing (PJON v5 feature)
+
+- **Public API**
+  - [ ] blocking [implementing]
+  - [x] non-blocking
+
+- Auto-discover of serial-PJON bridge
 
 PJON-python versions are aligned with PJON versions to indicate compatibility with C implementation for uC platforms.
 
-####v4 goals:
+#### v4 goals:
 - local and remote serial port support with auto-discovery of the serial2pjon proxy arduino
 - PJON serial strategy for local bus with ACK support [done]
 - full PJON serial protocol for serial strategy (remote buses support)
 
-####v5 goals:
+#### v5 goals:
 - auto addressing
 
 
-minimal client example
+## Minimal client example
 ```python
 from pjon_python.base_client import PjonBaseSerialClient
 import time
