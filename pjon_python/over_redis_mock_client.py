@@ -1,5 +1,6 @@
 from pjon_python.utils.RedisConn import RedisConn
 import uuid
+import time
 import logging
 import threading
 import fakeredis
@@ -32,9 +33,16 @@ class OverRedisClient(object):
                                        cli_id=self._uuid)
             log.debug("using fakeredis transport")
         else:
-            self._transport = RedisConn(transport,
-                                       sub_channel='pjon-python-redis',
-                                       pub_channel='pjon-python-redis')
+            while True:
+                try:
+                    self._transport = RedisConn(transport,
+                                               sub_channel='pjon-python-redis',
+                                               pub_channel='pjon-python-redis')
+                    break
+                except ConnectionError:
+                    log.exception("connection to Redis failed, retrying")
+                    time.sleep(1)
+                    
         log.debug("using transport: %s" % str(transport))
 
         #self.transport.subscribe('pjon-serial')
