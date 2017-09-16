@@ -5,6 +5,7 @@ import threading
 import fakeredis
 from pjon_python.protocol.pjon_protocol import PacketInfo
 from pjon_python.protocol.pjon_protocol import ReceivedPacket
+from redis import ConnectionError
 
 log = logging.getLogger("over_redis")
 
@@ -76,7 +77,10 @@ class OverRedisClient(object):
         message = dict()
         message['originator_uuid'] = self._uuid
         message['payload'] = string
-        self._transport.publish(message)
+        try:
+            self._transport.publish(message)
+        except ConnectionError:
+            log.exception("could not publish to redis")
 
     def send(self, receiver_id, payload, sender_id=None):
         log.debug("sending %s to %s" % (payload, receiver_id))
@@ -91,7 +95,10 @@ class OverRedisClient(object):
         packet_message['sender_bus_id'] = [0, 0, 0, 0]
         packet_message['payload'] = payload
         packet_message['payload_length'] = len(payload)
-        self._transport.publish(packet_message)
+        try:
+            self._transport.publish(packet_message)
+        except ConnectionError:
+            log.exception("could not publish to redis")
 
     def send_without_ack(self, device_id, payload):
         self.send(device_id, payload)

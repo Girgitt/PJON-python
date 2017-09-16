@@ -47,7 +47,7 @@ class RedisConn(object):
                         return message['data']
         return None
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def publish(self, payload, channel=None):
         if channel is None:
             channel = self._pub_channel_name
@@ -58,34 +58,34 @@ class RedisConn(object):
             pass
         self._redis_conn.publish(channel, payload)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def hgetall(self, *args, **kwargs):
         return self._redis_conn.hgetall(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def hget(self, *args, **kwargs):
         return self._redis_conn.hget(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def hmset(self, *args, **kwargs):
         return self._redis_conn.hmset(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def delete(self, *args, **kwargs):
         return self._redis_conn.delete(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def hdel(self, *args, **kwargs):
         return self._redis_conn.hdel(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def hset(self, *args, **kwargs):
         return self._redis_conn.hset(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def set(self, *args, **kwargs):
         return self._redis_conn.set(*args, **kwargs)
 
-    @retry(wait_fixed=1000, stop_max_attempt_number=3, retry_on_exception=retry_if_connection_error)
+    @retry(wait_fixed=1000, stop_max_attempt_number=3)
     def get(self, *args, **kwargs):
         return self._redis_conn.get(*args, **kwargs)
