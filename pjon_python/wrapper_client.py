@@ -492,7 +492,7 @@ class WatchDog(threading.Thread):
                                     self._parent.reset_piper_stdout_watchdog()
                         else:
                             if time.time() - self._birthtime > self.START_SECONDS_DEFAULT:
-                                if time.time() - self._parent._last_watchdog_poll_ts > 2:
+                                if time.time() - self._parent._last_watchdog_poll_ts > 10:
                                     log.critical("parent thread not active; quitting")
                                     self._pipe.terminate()
                                     break
