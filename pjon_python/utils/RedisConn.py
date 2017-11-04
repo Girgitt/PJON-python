@@ -43,7 +43,7 @@ class RedisConn(object):
                 if message['type'] == 'message':
                     try:
                         return jsonpickle.loads(message['data'])
-                    except ValueError:
+                    except(ValueError, KeyError):
                         return message['data']
         return None
 

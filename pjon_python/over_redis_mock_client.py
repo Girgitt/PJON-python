@@ -52,10 +52,15 @@ class OverRedisClient(object):
         self._started = False
         self._bus_addr = bus_addr
         self._receiver_function = self.dummy_receiver
+        self._receiver_function_forward = self.dummy_receiver_forward
         self._error_function = self.dummy_error
 
     @staticmethod
     def dummy_receiver(*args, **kwargs):
+        pass
+
+    @staticmethod
+    def dummy_receiver_forward(*args, **kwargs):
         pass
 
     @staticmethod
@@ -64,6 +69,9 @@ class OverRedisClient(object):
 
     def set_receiver(self, receiver_function):
         self._receiver_function = receiver_function
+
+    def set_receiver_forward(self, receiver_function):
+        self._receiver_function_forward = receiver_function
 
     def set_error(self, error_function):
         self._error_function = error_function
@@ -133,18 +141,23 @@ class OverRedisClient(object):
             new_message = self._transport.listen(rcv_timeout=0.01)
             if new_message:
                 if new_message['originator_uuid'] != self._uuid:
+                    log.debug("received message from someone")
                     packet = self.get_packet_info_obj_for_packet_message(new_message)
                     payload = packet.payload_as_string
                     packet_length = packet.packet_length
                     packet_info = packet.packet_info
                     if packet_info.receiver_id != 0:
-                        if packet_info.receiver_id != self._bus_addr:
+                        if packet_info.sender_id == self._bus_addr:
+                            log.debug("packet to be forwarded to: %s" % packet_info.receiver_id)
+                            self._receiver_function_forward(payload, packet_length, packet_info)
+                            continue
+                        elif packet_info.receiver_id != self._bus_addr:
                             log.debug("packet for someone else: %s" % str(packet_info))
                             continue
+                    log.debug("packet for me; calling receiver function")
                     self._receiver_function(payload, packet_length, packet_info)
                 else:
-                    pass
-                    #log.debug("received own msg")
+                    log.debug("received own msg")
 
     def __str__(self):
         return "OverRedisClient, transport: %s" % str(self._transport)
