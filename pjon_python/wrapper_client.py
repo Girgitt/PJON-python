@@ -322,7 +322,7 @@ class ReceivedPacketsProcessor(threading.Thread):
                     if self._stopped:
                         return
 
-                    line = self._parent._piper_client_stdout_queue.get(timeout=0.01)
+                    line = self._parent._piper_client_stdout_queue.get(block=False)
 
                     if len(line) > 1:
                         line = line.strip()
@@ -358,6 +358,7 @@ class ReceivedPacketsProcessor(threading.Thread):
                                 pass
 
                 except Empty:
+                    time.sleep(0.01)
                     continue
 
                 except (IOError, AttributeError):
@@ -617,13 +618,14 @@ class WatchDog(threading.Thread):
                                 break
                             if self._start_failed:
                                 break
-                            input_cmd = self._stdin_queue.get(timeout=.01)
+                            input_cmd = self._stdin_queue.get(block=False)
                             if input_cmd == '':  # and self._pipe.poll() is not None:
                                 continue
                             self._pipe.stdin.write(input_cmd+'\n')
                             self._pipe.stdin.flush()
                             continue
                         except Empty:
+                            time.sleep(0.01)
                             continue
                         except (IOError, AttributeError):
                             break
