@@ -81,12 +81,15 @@ class PjonPiperClient(threading.Thread):
                                                          'pjon_piper')
                     #print(self._pjon_piper_path)
                 else:
-                    NotImplementedError("Only Linux on Raspberry is supported")
+                    NotImplementedError("On ARM only Linux on Raspberry is supported")
+            elif (self.is_x86_platform()):
+			    self._pjon_piper_path = os.path.join(self.get_self_path(), 'pjon_piper_bin', 'linux',
+                                                         'pjon_piper')
             else:
                 raise NotImplementedError("this version of Linux is not supported yet")
         else:
             raise NotImplementedError("platform not supported; currently provided support only for: win32")
-
+        
         if sys.platform == 'win32':
             self._pipier_client_subproc_cmd = "%s %s %s %s\n" % (self._pjon_piper_path, com_port.strip(), baud, bus_addr)
         elif sys.platform == 'linux2':
@@ -123,7 +126,11 @@ class PjonPiperClient(threading.Thread):
     @staticmethod
     def is_arm_platform():
         return bool(sum([item.lower().startswith('armv') for item in platform.uname()]))
-
+    
+    @staticmethod
+    def is_x86_platform():
+        return bool(sum([item.lower().startswith('x86') for item in platform.uname()]))
+		
     @staticmethod
     def get_self_path():
         if sys.platform == 'win32':
