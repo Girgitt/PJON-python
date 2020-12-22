@@ -238,7 +238,7 @@ class PjonPiperClient(threading.Thread):
             if sys.platform == 'win32':
                 coms = [item.device for item in list_ports.comports()]
             elif sys.platform == 'linux2':
-                coms = [item[0] for item in list_ports.comports()]
+                coms = [item[0] for item in list_ports.comports(include_links=True)]
 
         return coms
 
