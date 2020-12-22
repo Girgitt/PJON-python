@@ -43,7 +43,7 @@ class OverRedisClient(object):
                     log.exception("connection to Redis failed, retrying")
                     time.sleep(1)
 
-        log.debug("using transport: %s" % str(transport))
+        #log.debug("using transport: %s" % str(transport))
 
         #self.transport.subscribe('pjon-serial')
         self._transport.subscribe('pjon-python-redis')
