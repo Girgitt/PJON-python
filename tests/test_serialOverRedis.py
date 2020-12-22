@@ -1,6 +1,7 @@
 from unittest import TestCase
 import mock
 import time
+import json
 import fakeredis
 
 from pjon_python.utils import fakeserial
@@ -48,7 +49,7 @@ class TestSerialOverRedis(TestCase):
                     "receiver_bus_id": [0, 0, 0, 0],
                     "originator_uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                     "payload": "B test 123"}
-                redis_cli.publish('pjon-python-redis', test_msg)
+                redis_cli.publish('pjon-python-redis', json.dumps(test_msg))
                 time.sleep(0.1)
                 self.assertFalse(rcv_fwd_mock.called)
                 self.assertTrue(rcv_mock.called)
@@ -70,7 +71,7 @@ class TestSerialOverRedis(TestCase):
                     "receiver_bus_id": [0, 0, 0, 0],
                     "originator_uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                     "payload": "B test 123"}
-                redis_cli.publish('pjon-python-redis', test_msg)
+                redis_cli.publish('pjon-python-redis', json.dumps(test_msg))
                 time.sleep(0.1)
                 self.assertTrue(rcv_fwd_mock.called)
                 self.assertFalse(rcv_mock.called)
